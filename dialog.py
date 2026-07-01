@@ -24,6 +24,7 @@ Three tabs:
 """
 
 import os
+import time
 
 from qgis.PyQt.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
@@ -43,11 +44,13 @@ try:
     from qgis.core import (
         QgsProject, QgsRectangle, QgsCoordinateTransform,
         QgsCoordinateReferenceSystem, QgsGeometry, QgsVectorLayer,
-        QgsRasterLayer,
+        QgsRasterLayer, QgsMessageLog, Qgis,
     )
     _HAS_QGIS = True
 except ImportError:
     _HAS_QGIS = False
+    QgsMessageLog = None
+    Qgis = None
 
 try:
     from qgis.utils import iface as _iface
@@ -58,7 +61,7 @@ from .qt_compat import ensure_qt_compat, QtCompat
 from .core_stac import (
     STAC_CATALOGS, stac_search, stac_collections, geocode_nominatim,
     nominatim_polygon, parse_stac_item, best_raster_asset,
-    load_raster_to_qgis, download_asset, clip_raster,
+    load_raster_to_qgis, download_asset, clip_raster, sign_href_if_needed,
 )
 
 try:
@@ -67,6 +70,18 @@ except ImportError:
     QgsSettings = None
 
 ensure_qt_compat(Qt)
+
+
+def _log(msg, level="warning"):
+    """Log a message to the QGIS log panel (no-op outside QGIS)."""
+    if QgsMessageLog is None or Qgis is None:
+        return
+    lvl = {
+        "info": Qgis.Info,
+        "warning": Qgis.Warning,
+        "critical": Qgis.Critical,
+    }.get(level, Qgis.Warning)
+    QgsMessageLog.logMessage(str(msg), "STAC Browser", lvl)
 
 
 # ---------------------------------------------------------------------------
@@ -78,6 +93,11 @@ def _t(lang, it, en):
     return en if lang == "en" else it
 
 
+def _en_it(en, it):
+    """Return a compact English-first bilingual UI string."""
+    return f"{en} / {it}"
+
+
 # ---------------------------------------------------------------------------
 # Dark stylesheet
 # ---------------------------------------------------------------------------
@@ -86,7 +106,8 @@ OCEAN_STYLE = """
 QDialog {
     background-color: #020e1a;
     color: #d0f0ff;
-    font-family: 'Segoe UI', 'Inter', 'Roboto', Tahoma, Geneva, Verdana, sans-serif;
+    font-family: 'Segoe UI', 'Inter', 'Roboto', Tahoma, Geneva,
+                 Verdana, sans-serif;
     font-size: 13px;
 }
 QWidget { background-color: #020e1a; color: #d0f0ff; }
@@ -96,7 +117,8 @@ QGroupBox {
     border-radius: 8px;
     margin-top: 10px;
     padding: 12px 10px;
-    background: qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #071c2e,stop:1 #020e1a);
+    background: qlineargradient(x1:0,y1:0,x2:0,y2:1,
+                stop:0 #071c2e,stop:1 #020e1a);
     color: #d0f0ff;
     font-weight: 600;
 }
@@ -108,7 +130,8 @@ QGroupBox::title {
     font-size: 12px;
 }
 QPushButton {
-    background: qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #006688,stop:1 #004455);
+    background: qlineargradient(x1:0,y1:0,x2:0,y2:1,
+                stop:0 #006688,stop:1 #004455);
     color: #00e5ff;
     border: 1px solid #00e5ff;
     border-radius: 6px;
@@ -117,11 +140,14 @@ QPushButton {
     font-size: 12px;
 }
 QPushButton:hover {
-    background: qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #0099bb,stop:1 #006688);
+    background: qlineargradient(x1:0,y1:0,x2:0,y2:1,
+                stop:0 #0099bb,stop:1 #006688);
     color: #d0f0ff;
 }
 QPushButton:pressed { background: #004455; }
-QPushButton:disabled { background: #071c2e; color: #4a8090; border-color: #0a3a58; }
+QPushButton:disabled {
+    background: #071c2e; color: #4a8090; border-color: #0a3a58;
+}
 QPushButton#btnLang {
     background: #071c2e;
     color: #7ac8d8;
@@ -182,7 +208,8 @@ QProgressBar {
     color: transparent;
 }
 QProgressBar::chunk {
-    background: qlineargradient(x1:0,y1:0,x2:1,y2:0,stop:0 #0099bb,stop:1 #00e5ff);
+    background: qlineargradient(x1:0,y1:0,x2:1,y2:0,
+                stop:0 #0099bb,stop:1 #00e5ff);
     border-radius: 3px;
 }
 QCheckBox { color: #7ac8d8; spacing: 6px; }
@@ -245,55 +272,52 @@ INFO_HTML = """
   h4   { color:#f59e0b; font-size:12px; margin:12px 0 4px; }
   p, li { margin:3px 0; color:#7ac8d8; }
   a    { color:#00e5ff; }
-  code { background:#0d2d42; padding:1px 4px; border-radius:3px; font-family:monospace; }
+  code { background:#0d2d42; padding:1px 4px; border-radius:3px;
+         font-family:monospace; }
   table { border-collapse:collapse; width:100%; margin:8px 0; }
   th   { background:#0d2d42; color:#7ac8d8; padding:6px 10px; text-align:left;
          border-bottom:2px solid #0a4a6e; font-size:11px; }
   td   { padding:5px 10px; border-bottom:1px solid #0d2d42; color:#d0f0ff; }
   tr:nth-child(even) td { background:rgba(7,28,46,0.5); }
-  .badge-warn { background:rgba(239,68,68,0.15); color:#ef4444; padding:1px 6px;
-                border-radius:8px; font-size:11px; font-weight:600; }
-  .badge-ok   { background:rgba(34,197,94,0.15); color:#22c55e; padding:1px 6px;
-                border-radius:8px; font-size:11px; font-weight:600; }
+  .badge-warn { background:rgba(239,68,68,0.15); color:#ef4444;
+                padding:1px 6px; border-radius:8px; font-size:11px;
+                font-weight:600; }
+  .badge-ok   { background:rgba(34,197,94,0.15); color:#22c55e;
+                padding:1px 6px; border-radius:8px; font-size:11px;
+                font-weight:600; }
   .section-sep { border:none; border-top:1px solid #0d2d42; margin:16px 0; }
 </style>
 </head>
 <body>
 
-<h2>STAC BROWSER &mdash; INFORMAZIONI / INFORMATION</h2>
+<h2>STAC BROWSER &mdash; INFORMATION / INFORMAZIONI</h2>
 
-<h3>IL PLUGIN È UN FACILITATORE / THE PLUGIN IS A FACILITATOR</h3>
+<h3>THE PLUGIN IS A FACILITATOR / IL PLUGIN È UN FACILITATORE</h3>
+<p><b>EN:</b> STAC Browser <b>does not host or resell data</b>. It only helps
+you <i>find</i> and <i>download</i> data already published by the official
+providers (ESA, NASA, USGS, Microsoft, etc.). The data remains owned by and is
+the responsibility of those providers and is subject to <b>their licenses</b>:
+always read them before use and give the required attribution.</p>
 <p><b>IT:</b> STAC Browser <b>non ospita né rivende dati</b>. È solo uno
 strumento che ti aiuta a <i>trovare</i> e <i>scaricare</i> dati gi&agrave;
 pubblicati dai provider ufficiali (ESA, NASA, USGS, Microsoft, ecc.). I dati
 restano di propriet&agrave; e responsabilit&agrave; dei rispettivi provider e
 sono soggetti alle <b>loro licenze</b>: leggile sempre prima dell'uso e cita
 la fonte richiesta.</p>
-<p><b>EN:</b> STAC Browser <b>does not host or resell data</b>. It only helps
-you <i>find</i> and <i>download</i> data already published by the official
-providers (ESA, NASA, USGS, Microsoft, etc.). The data remains owned by and is
-the responsibility of those providers and is subject to <b>their licenses</b>:
-always read them before use and give the required attribution.</p>
 
-<h3>FONTI LIBERE E FONTI CON REGISTRAZIONE / OPEN vs REGISTERED SOURCES</h3>
+<h3>OPEN vs REGISTERED SOURCES / FONTI LIBERE E CON REGISTRAZIONE</h3>
 <table>
-  <tr><th>Tipo / Type</th><th>Cataloghi / Catalogs</th><th>Download</th></tr>
-  <tr><td><span class="badge-ok">Libero / Open</span></td>
-      <td>Element84 Earth Search, Microsoft Planetary Computer (firma SAS
-      automatica), OpenLandMap, US GeoPlatform, Digital Earth Australia</td>
-      <td>Automatico, nessun login / Automatic, no login</td></tr>
-  <tr><td><span class="badge-warn">Registrazione / Registration</span></td>
+  <tr><th>Type / Tipo</th><th>Catalogs / Cataloghi</th><th>Download</th></tr>
+  <tr><td><span class="badge-ok">Open / Libero</span></td>
+      <td>Element84 Earth Search, Microsoft Planetary Computer (automatic SAS
+      signing / firma SAS automatica), OpenLandMap, US GeoPlatform,
+      Digital Earth Australia</td>
+      <td>Automatic, no login / Automatico, nessun login</td></tr>
+  <tr><td><span class="badge-warn">Registration / Registrazione</span></td>
       <td>USGS LandsatLook (EROS), NASA EarthData CMR, Copernicus Data
       Space</td>
-      <td>Richiede account gratuito / Requires free account</td></tr>
+      <td>Requires free account / Richiede account gratuito</td></tr>
 </table>
-<p><b>IT:</b> per impostazione predefinita il plugin scarica automaticamente
-solo dalle fonti libere. Per i cataloghi che richiedono registrazione, sulla
-scheda compare il pulsante <code>🔐 Registrazione richiesta</code> che apre il
-<b>sito ufficiale</b>; dopo esserti registrato inserisci utente/password o
-token nel tab <code>🔐 Account</code> (le credenziali sono salvate solo in
-locale). Quando GDAL riceve una pagina di login al posto del file, il plugin
-<b>non salva file fasulli</b> e te lo segnala.</p>
 <p><b>EN:</b> by default the plugin auto-downloads only from open sources. For
 catalogs that need registration, the card shows a
 <code>🔐 Registration required</code> button that opens the <b>official
@@ -301,8 +325,21 @@ site</b>; after registering, enter username/password or token in the
 <code>🔐 Account</code> tab (credentials are stored locally only). When GDAL
 gets a login page instead of the file, the plugin <b>never saves bogus
 files</b> and tells you.</p>
+<p><b>IT:</b> per impostazione predefinita il plugin scarica automaticamente
+solo dalle fonti libere. Per i cataloghi che richiedono registrazione, sulla
+scheda compare il pulsante <code>🔐 Registrazione richiesta</code> che apre il
+<b>sito ufficiale</b>; dopo esserti registrato inserisci utente/password o
+token nel tab <code>🔐 Account</code> (le credenziali sono salvate solo in
+locale). Quando GDAL riceve una pagina di login al posto del file, il plugin
+<b>non salva file fasulli</b> e te lo segnala.</p>
 
-<h3>RITAGLIO / CLIPPING</h3>
+<h3>CLIPPING / RITAGLIO</h3>
+<p><b>EN:</b> in the <code>🔍 Search</code> tab, <b>Output</b> group, pick
+<code>📦 Full dataset</code> or <code>✂️ Automatic clip</code>. The clip
+boundary can be the <b>OSM municipal boundary</b> (type the municipality name,
+geometry from OpenStreetMap via Nominatim) or the <b>geometry of the active
+QGIS layer/selection</b>. Clipping reads the remote COG directly through GDAL
+<code>/vsicurl/</code>, fetching only the pixels inside the chosen area.</p>
 <p><b>IT:</b> nel tab <code>🔍 Ricerca</code>, gruppo <b>Output</b>, scegli
 <code>📦 Dataset completo</code> oppure <code>✂️ Ritaglio automatico</code>.
 Per il ritaglio il confine pu&ograve; essere il <b>limite comunale OSM</b>
@@ -310,25 +347,24 @@ Per il ritaglio il confine pu&ograve; essere il <b>limite comunale OSM</b>
 oppure la <b>geometria del layer/selezione attiva</b> in QGIS. Il ritaglio
 legge direttamente il COG remoto via GDAL <code>/vsicurl/</code>, quindi
 scarica solo i pixel nell'area scelta.</p>
-<p><b>EN:</b> in the <code>🔍 Search</code> tab, <b>Output</b> group, pick
-<code>📦 Full dataset</code> or <code>✂️ Automatic clip</code>. The clip
-boundary can be the <b>OSM municipal boundary</b> (type the municipality name,
-geometry from OpenStreetMap via Nominatim) or the <b>geometry of the active
-QGIS layer/selection</b>. Clipping reads the remote COG directly through GDAL
-<code>/vsicurl/</code>, fetching only the pixels inside the chosen area.</p>
 
-<h3>CATALOGHI INCLUSI / INCLUDED CATALOGS</h3>
+<h3>INCLUDED CATALOGS / CATALOGHI INCLUSI</h3>
 
 <h4>1. Element84 Earth Search</h4>
 <table>
   <tr><th>URL</th><td>
       <a href="https://earth-search.aws.element84.com/v1"
       >earth-search.aws.element84.com/v1</a></td></tr>
-  <tr><th>Dati / Data</th><td>Sentinel-2 L2A, Landsat Collection 2, NAIP, Copernicus DEM</td></tr>
-  <tr><th>Licenza / License</th>
-      <td>Sentinel-2: CC BY 4.0 (Copernicus/ESA). Landsat: Public Domain (USGS/NASA).</td></tr>
-  <tr><th>Limiti / Limits</th><td>
-      <span class="badge-ok">Nessun limite esplicito (AWS, fair use)</span></td></tr>
+  <tr><th>Data / Dati</th>
+      <td>Sentinel-2 L2A, Landsat Collection 2, NAIP,
+      Copernicus DEM</td></tr>
+  <tr><th>License / Licenza</th>
+      <td>Sentinel-2: CC BY 4.0 (Copernicus/ESA).
+      Landsat: Public Domain (USGS/NASA).</td></tr>
+  <tr><th>Limits / Limiti</th><td>
+      <span class="badge-ok">No explicit limit (AWS, fair use) /
+      Nessun limite esplicito</span>
+      </td></tr>
 </table>
 
 <h4>2. Microsoft Planetary Computer</h4>
@@ -336,52 +372,70 @@ QGIS layer/selection</b>. Clipping reads the remote COG directly through GDAL
   <tr><th>URL</th>
       <td><a href="https://planetarycomputer.microsoft.com/api/stac/v1"
       >planetarycomputer.microsoft.com/api/stac/v1</a></td></tr>
-  <tr><th>Dati / Data</th>
-      <td>Sentinel-2, Landsat, MODIS, NAIP, DEM, permafrost e molto altro</td></tr>
-  <tr><th>Licenza / License</th>
-      <td>Dipende dalla collezione. Molti CC BY 4.0 o Public Domain.</td></tr>
+  <tr><th>Data / Dati</th>
+      <td>Sentinel-2, Landsat, MODIS, NAIP, DEM, permafrost
+      and much more / e molto altro</td></tr>
+  <tr><th>License / Licenza</th>
+      <td>Collection-dependent. Many are CC BY 4.0 or Public Domain. /
+      Dipende dalla collezione. Molti sono CC BY 4.0 o Public Domain.</td></tr>
   <tr><th>Note</th>
-      <td>Download asset può richiedere token SAS gratuito per alcuni dataset.</td></tr>
-  <tr><th>Limiti / Limits</th>
-      <td><span class="badge-ok">Nessun limite per la ricerca</span></td></tr>
+      <td>Asset download may require a free SAS token for some datasets. /
+      Il download degli asset può richiedere un token SAS gratuito per alcuni
+      dataset.</td></tr>
+  <tr><th>Limits / Limiti</th>
+      <td><span class="badge-ok">No search limit / Nessun limite per la
+      ricerca</span></td></tr>
 </table>
 
 <h4>3. USGS LandsatLook</h4>
 <table>
   <tr><th>URL</th><td><a href="https://landsatlook.usgs.gov/stac-server"
       >landsatlook.usgs.gov/stac-server</a></td></tr>
-  <tr><th>Dati / Data</th><td>Landsat Collection 2 (Landsat 5, 7, 8, 9)</td></tr>
-  <tr><th>Licenza / License</th><td>Public Domain &mdash; USGS/NASA.</td></tr>
-  <tr><th>Limiti / Limits</th><td>
-      <span class="badge-ok">Nessun limite esplicito (US Gov)</span></td></tr>
+  <tr><th>Data / Dati</th>
+      <td>Landsat Collection 2 (Landsat 5, 7, 8, 9)</td></tr>
+  <tr><th>License / Licenza</th><td>Public Domain &mdash; USGS/NASA.</td></tr>
+  <tr><th>Limits / Limiti</th><td>
+      <span class="badge-ok">No explicit limit (US Gov) / Nessun limite
+      esplicito</span></td></tr>
 </table>
 
 <h4>4. NASA EarthData CMR</h4>
 <table>
   <tr><th>URL</th><td><a href="https://cmr.earthdata.nasa.gov/stac"
       >cmr.earthdata.nasa.gov/stac</a></td></tr>
-  <tr><th>Dati / Data</th><td>MODIS, VIIRS, ASTER, OCO-2, centinaia di dataset NASA</td></tr>
-  <tr><th>Licenza / License</th>
-      <td>Public Domain. Alcuni dataset richiedono registrazione EarthData gratuita.</td></tr>
-  <tr><th>Limiti / Limits</th><td><span class="badge-ok">Ricerca libera</span></td></tr>
+  <tr><th>Data / Dati</th>
+      <td>MODIS, VIIRS, ASTER, OCO-2, hundreds of NASA datasets /
+      centinaia di dataset NASA</td></tr>
+  <tr><th>License / Licenza</th>
+      <td>Public Domain. Some datasets require free EarthData registration. /
+      Alcuni dataset richiedono registrazione EarthData gratuita.</td></tr>
+  <tr><th>Limits / Limiti</th>
+      <td><span class="badge-ok">Open search / Ricerca libera</span></td></tr>
 </table>
 
 <h4>5. OpenLandMap</h4>
 <table>
   <tr><th>URL</th><td><a href="https://openlandmap.github.io/stac"
       >openlandmap.github.io/stac</a></td></tr>
-  <tr><th>Dati / Data</th><td>Variabili pedologiche, vegetazione, clima globale</td></tr>
-  <tr><th>Licenza / License</th><td>CC BY 4.0</td></tr>
-  <tr><th>Limiti / Limits</th><td>
-      <span class="badge-warn">~100 req/giorno (fair use)</span></td></tr>
+  <tr><th>Data / Dati</th>
+      <td>Soil variables, vegetation, global climate / Variabili
+      pedologiche, vegetazione, clima globale</td></tr>
+  <tr><th>License / Licenza</th><td>CC BY 4.0</td></tr>
+  <tr><th>Limits / Limiti</th><td>
+      <span class="badge-warn">~100 req/day (fair use) / ~100 req/giorno
+      (fair use)</span></td></tr>
 </table>
 
 <h4>6. US GeoPlatform</h4>
 <table>
-  <tr><th>URL</th><td><a href="https://stac.geoplatform.gov">stac.geoplatform.gov</a></td></tr>
-  <tr><th>Dati / Data</th><td>Dataset geospaziali federali USA</td></tr>
-  <tr><th>Licenza / License</th><td>Public Domain (US Government)</td></tr>
-  <tr><th>Limiti / Limits</th><td><span class="badge-ok">Nessun limite esplicito</span></td></tr>
+  <tr><th>URL</th><td><a href="https://stac.geoplatform.gov"
+      >stac.geoplatform.gov</a></td></tr>
+  <tr><th>Data / Dati</th><td>US federal geospatial datasets / Dataset
+      geospaziali federali USA</td></tr>
+  <tr><th>License / Licenza</th><td>Public Domain (US Government)</td></tr>
+  <tr><th>Limits / Limiti</th>
+      <td><span class="badge-ok">No explicit limit / Nessun limite
+      esplicito</span></td></tr>
 </table>
 
 <h4>7. Copernicus Data Space</h4>
@@ -389,70 +443,101 @@ QGIS layer/selection</b>. Clipping reads the remote COG directly through GDAL
   <tr><th>URL</th><td>
       <a href="https://catalogue.dataspace.copernicus.eu/stac"
       >catalogue.dataspace.copernicus.eu/stac</a></td></tr>
-  <tr><th>Dati / Data</th><td>Sentinel-1, Sentinel-2, Sentinel-3, Sentinel-5P</td></tr>
-  <tr><th>Licenza / License</th><td>CC BY 4.0 &mdash; Copernicus Programme / ESA</td></tr>
-  <tr><th>Note</th><td>Download richiede registrazione gratuita su
-      <a href="https://dataspace.copernicus.eu">dataspace.copernicus.eu</a></td></tr>
-  <tr><th>Limiti / Limits</th><td><span class="badge-ok">Ricerca libera</span></td></tr>
+  <tr><th>Data / Dati</th>
+      <td>Sentinel-1, Sentinel-2, Sentinel-3, Sentinel-5P</td></tr>
+  <tr><th>License / Licenza</th>
+      <td>CC BY 4.0 &mdash; Copernicus Programme / ESA</td></tr>
+  <tr><th>Note</th><td>Download requires free registration at /
+      Il download richiede registrazione gratuita su
+      <a href="https://dataspace.copernicus.eu"
+      >dataspace.copernicus.eu</a></td></tr>
+  <tr><th>Limits / Limiti</th>
+      <td><span class="badge-ok">Open search / Ricerca libera</span></td></tr>
 </table>
 
 <h4>8. Digital Earth Australia</h4>
 <table>
   <tr><th>URL</th><td><a href="https://explorer.dea.ga.gov.au/stac"
       >explorer.dea.ga.gov.au/stac</a></td></tr>
-  <tr><th>Dati / Data</th><td>Landsat e Sentinel elaborati su Australia</td></tr>
-  <tr><th>Licenza / License</th><td>CC BY 4.0 &mdash; Geoscience Australia</td></tr>
-  <tr><th>Limiti / Limits</th><td><span class="badge-ok">Nessun limite esplicito</span></td></tr>
+  <tr><th>Data / Dati</th>
+      <td>Landsat and Sentinel processed over Australia / Landsat e Sentinel
+      elaborati su Australia</td></tr>
+  <tr><th>License / Licenza</th>
+      <td>CC BY 4.0 &mdash; Geoscience Australia</td></tr>
+  <tr><th>Limits / Limiti</th>
+      <td><span class="badge-ok">No explicit limit / Nessun limite
+      esplicito</span></td></tr>
 </table>
 
 <hr class="section-sep"/>
 <h3>STANDARD STAC</h3>
-<p>STAC (SpatioTemporal Asset Catalog) &egrave; uno standard aperto per la catalogazione
-di dati geospaziali. Versione corrente: <strong>1.0.0</strong>.<br>
-Sito ufficiale: <a href="https://stacspec.org">https://stacspec.org</a></p>
+<p>STAC (SpatioTemporal Asset Catalog) is an open standard for cataloging
+geospatial data. / STAC &egrave; uno standard aperto per la catalogazione di
+dati geospaziali.<br>
+Current version / Versione corrente: <strong>1.5.0</strong>.<br>
+Official site / Sito ufficiale:
+<a href="https://stacspec.org">https://stacspec.org</a></p>
 
 <hr class="section-sep"/>
-<h3>ATTRIBUZIONE RICHIESTA / ATTRIBUTION REQUIRED</h3>
+<h3>ATTRIBUTION REQUIRED / ATTRIBUZIONE RICHIESTA</h3>
 <ul>
-  <li><b>Sentinel:</b> "Contains modified Copernicus Sentinel data [anno] / ESA"</li>
+  <li><b>Sentinel:</b> "Contains modified Copernicus Sentinel data
+      [year] / [anno] / ESA"</li>
   <li><b>Landsat:</b> "Courtesy of the U.S. Geological Survey"</li>
   <li><b>OpenLandMap:</b> "&copy; OpenLandMap contributors, CC BY 4.0"</li>
-  <li><b>DEA:</b> "&copy; Commonwealth of Australia (Geoscience Australia), CC BY 4.0"</li>
+  <li><b>DEA:</b> "&copy; Commonwealth of Australia
+      (Geoscience Australia), CC BY 4.0"</li>
 </ul>
 
 <hr class="section-sep"/>
-<h3>NOTE TECNICHE / TECHNICAL NOTES</h3>
+<h3>TECHNICAL NOTES / NOTE TECNICHE</h3>
 <ul>
-  <li>Il plugin usa <code>/vsicurl/</code> di GDAL/OGR per aprire raster remoti
-      direttamente in QGIS senza scaricare l'intero file.</li>
-  <li>File GeoTIFF cloud-optimized (COG) sono supportati nativamente.</li>
-  <li>NetCDF, HDF5 e JPEG2000 potrebbero richiedere driver GDAL aggiuntivi.</li>
-  <li>Per file molto grandi (&gt;1 GB), si raccomanda il download prima dell'apertura.</li>
+  <li>The plugin uses GDAL/OGR <code>/vsicurl/</code> to open remote rasters
+      in QGIS without downloading the whole file. / Il plugin usa
+      <code>/vsicurl/</code> di GDAL/OGR per aprire raster remoti in QGIS
+      senza scaricare l'intero file.</li>
+  <li>Cloud Optimized GeoTIFF files (COG) are supported natively. / I file
+      GeoTIFF cloud-optimized (COG) sono supportati nativamente.</li>
+  <li>NetCDF, HDF5 and JPEG2000 may require additional GDAL drivers. /
+      NetCDF, HDF5 e JPEG2000 potrebbero richiedere driver GDAL
+      aggiuntivi.</li>
+  <li>For very large files (&gt;1 GB), downloading before opening is
+      recommended. / Per file molto grandi (&gt;1 GB), si raccomanda il
+      download prima dell'apertura.</li>
 </ul>
 
 <hr class="section-sep"/>
-<h3>ALTRI PLUGIN DELL'AUTORE / OTHER PLUGINS BY THE AUTHOR</h3>
+<h3>OTHER PLUGINS BY THE AUTHOR / ALTRI PLUGIN DELL'AUTORE</h3>
 <ul>
-  <li><b>Profili, Sezioni e Comuni</b> &mdash; Profili altimetrici e sezioni trasversali</li>
-  <li><b>Q-Press</b> &mdash; Generatore PDF cartografico professionale</li>
-  <li><b>QGIS Ledger</b> &mdash; Raccolta dati field con sync NextCloud</li>
-  <li><b>Geobridge</b> &mdash; Conversione coordinate geodetiche e trasformazioni di datum</li>
-  <li><b>CRS Fixer</b> &mdash; Correzione automatica CRS layer</li>
-  <li><b>GeoCSV Mapper</b> &mdash; Importazione CSV geografici avanzata</li>
-  <li><b>GeoFusion WebGIS</b> &mdash; Piattaforma WebGIS open source &mdash;
+  <li><b>Profili, Sezioni e Comuni</b> &mdash; Elevation profiles and cross
+      sections / Profili altimetrici e sezioni trasversali</li>
+  <li><b>Q-Press</b> &mdash; Professional cartographic PDF generator /
+      Generatore PDF cartografico professionale</li>
+  <li><b>QGIS Ledger</b> &mdash; Field data collection with NextCloud sync /
+      Raccolta dati field con sync NextCloud</li>
+  <li><b>Geobridge</b> &mdash; Geodetic coordinate conversion and datum
+      transformations / Conversione coordinate geodetiche e trasformazioni di
+      datum</li>
+  <li><b>CRS Fixer</b> &mdash; Automatic layer CRS correction / Correzione
+      automatica CRS layer</li>
+  <li><b>GeoCSV Mapper</b> &mdash; Advanced geographic CSV import /
+      Importazione CSV geografici avanzata</li>
+  <li><b>GeoFusion WebGIS</b> &mdash; Open-source WebGIS platform /
+      Piattaforma WebGIS open source &mdash;
       <a href="https://sinocloud.it">sinocloud.it</a></li>
 </ul>
-<p>Autore: Dott. Sarino Alfonso Grande &nbsp;|&nbsp;
-   <a href="mailto:sino.grande@gmail.com">sino.grande@gmail.com</a> &nbsp;|&nbsp;
+<p>Author / Autore: Dott. Sarino Alfonso Grande &nbsp;|&nbsp;
+   <a href="mailto:sino.grande@gmail.com">sino.grande@gmail.com</a>
+   &nbsp;|&nbsp;
    <a href="https://sinocloud.it">sinocloud.it</a></p>
 
 <hr class="section-sep"/>
-<h3>LICENZA PLUGIN / PLUGIN LICENSE</h3>
+<h3>PLUGIN LICENSE / LICENZA PLUGIN</h3>
 <p>GPL-2.0 &mdash; Copyright (C) 2024 Dott. Sarino Alfonso Grande<br>
-Questo plugin &egrave; software libero: puoi redistribuirlo e/o modificarlo
-secondo i termini della GNU General Public License versione 2.<br>
 This plugin is free software: you can redistribute it and/or modify it
-under the terms of the GNU General Public License version 2.</p>
+under the terms of the GNU General Public License version 2.<br>
+Questo plugin &egrave; software libero: puoi redistribuirlo e/o modificarlo
+secondo i termini della GNU General Public License versione 2.</p>
 
 </body>
 </html>
@@ -505,7 +590,8 @@ class StacSearchWorker(QThread):
             parsed = []
             for feat in result.get("items") or []:
                 parsed.append(parse_stac_item(feat, cat["url"], cat["name"]))
-            self.catalogResult.emit(cat["id"], parsed, result.get("error") or "")
+            self.catalogResult.emit(
+                cat["id"], parsed, result.get("error") or "")
         self.finished.emit()
 
 
@@ -546,20 +632,25 @@ class PreviewFetcher(QThread):
 
     def run(self):
         import urllib.request
+        import urllib.parse
         try:
+            if urllib.parse.urlparse(self.url).scheme.lower() not in (
+                    "http", "https"):
+                return
             req = urllib.request.Request(
                 self.url,
                 headers={"User-Agent": "QGIS-STAC-Browser/1.0"},
             )
-            with urllib.request.urlopen(req, timeout=10) as resp:
+            # Scheme already validated above: only http/https reach here.
+            with urllib.request.urlopen(req, timeout=10) as resp:  # nosec B310
                 data = resp.read()
             pixmap = QPixmap()
             pixmap.loadFromData(data)
             if not pixmap.isNull():
                 self.cache[self.url] = pixmap
                 self.pixmapReady.emit(self.url, pixmap)
-        except Exception:
-            pass
+        except Exception as exc:
+            _log("Preview fetch failed for %s: %s" % (self.url, exc))
 
 
 # ---------------------------------------------------------------------------
@@ -581,7 +672,8 @@ class DownloadWorker(QThread):
             download_asset(
                 self.href,
                 self.output_path,
-                progress_callback=lambda done, total: self.progress.emit(done, total),
+                progress_callback=lambda done, total: self.progress.emit(
+                    done, total),
                 auth=self.auth,
             )
             self.finished.emit(True, self.output_path)
@@ -666,11 +758,973 @@ class ClipWorker(QThread):
 # Item card widget
 # ---------------------------------------------------------------------------
 
+_DATA_TYPE_ORDER = (
+    "orthophoto", "bands_1", "bands_2", "bands_3", "multispectral",
+    "radar", "dem", "other",
+)
+
+
+def _data_type_label(lang, key):
+    labels = {
+        "orthophoto": ("Ortofoto", "Orthophoto"),
+        "bands_1": ("1 banda", "1 band"),
+        "bands_2": ("2 bande", "2 bands"),
+        "bands_3": ("3 bande / RGB", "3 bands / RGB"),
+        "multispectral": ("Multispettrale", "Multispectral"),
+        "radar": ("Radar / SAR", "Radar / SAR"),
+        "dem": ("DEM / Elevazione", "DEM / Elevation"),
+        "other": ("Altri dati", "Other data"),
+    }
+    it, en = labels.get(key, labels["other"])
+    return _t(lang, it, en)
+
+
+def _data_type_icon(key):
+    icons = {
+        "orthophoto": "🗺",
+        "bands_1": "◐",
+        "bands_2": "◒",
+        "bands_3": "🎨",
+        "multispectral": "🌈",
+        "radar": "📡",
+        "dem": "⛰",
+        "other": "📦",
+    }
+    return icons.get(key, "📦")
+
+
+def _item_date(item):
+    dt = item.get("datetime") or item.get("start_datetime") or ""
+    return dt[:10] if dt else ""
+
+
+def _item_title(item, max_chars=64):
+    title = item.get("id") or item.get("collection") or "STAC item"
+    return title if len(title) <= max_chars else title[:max_chars - 1] + "…"
+
+
+def _asset_by_band_role(item):
+    mapping = {}
+    for asset in item.get("assets") or []:
+        if not asset.get("is_raster"):
+            continue
+        for role in asset.get("band_roles") or []:
+            mapping.setdefault(role, asset)
+    return mapping
+
+
+def _html_escape(value):
+    import html
+    return html.escape(str(value or ""))
+
+
+def _format_elapsed(seconds):
+    seconds = max(0, int(seconds))
+    minutes, secs = divmod(seconds, 60)
+    if minutes:
+        return "%dm %02ds" % (minutes, secs)
+    return "%ds" % secs
+
+
+def _plugin_icon_path():
+    return os.path.join(os.path.dirname(__file__), "icon.svg")
+
+
+def _make_progress_logo(size=56):
+    logo = QLabel()
+    logo.setAlignment(QtCompat.AlignCenter)
+    pix = QIcon(_plugin_icon_path()).pixmap(QSize(size, size))
+    if not pix.isNull():
+        logo.setPixmap(pix)
+    else:
+        logo.setText("STAC")
+    opacity = QGraphicsOpacityEffect(logo)
+    opacity.setOpacity(1.0)
+    logo.setGraphicsEffect(opacity)
+    return logo, opacity
+
+
+def _pulse_logo_opacity(opacity, fade_up, progress):
+    floor = max(0.15, 0.7 - progress / 100.0 * 0.55)
+    step = 0.12 + progress / 100.0 * 0.25
+    op = opacity.opacity()
+    op = op + step if fade_up else op - step
+    if op <= floor:
+        op = floor
+        fade_up = True
+    elif op >= 1.0:
+        op = 1.0
+        fade_up = False
+    opacity.setOpacity(op)
+    return fade_up
+
+
+class _ItemDetailsDialog(QDialog):
+    """Modal with complete STAC item metadata and asset inventory."""
+
+    def __init__(self, item, lang="it", parent=None):
+        super().__init__(parent)
+        self.item = item
+        self.lang = lang
+        self.setWindowTitle(_t(lang, "Dettagli dataset", "Dataset details"))
+        self.resize(680, 560)
+        self.setStyleSheet(OCEAN_STYLE)
+
+        layout = QVBoxLayout(self)
+        title = QLabel(_item_title(item, 96))
+        title.setWordWrap(True)
+        title.setStyleSheet(
+            "color:#00e5ff; font-size:15px; font-weight:700;"
+            "padding:4px 0;"
+        )
+        layout.addWidget(title)
+
+        browser = QTextBrowser()
+        browser.setOpenExternalLinks(True)
+        browser.setHtml(self._html())
+        layout.addWidget(browser, 1)
+
+        row = QHBoxLayout()
+        row.addStretch()
+        btn_close = QPushButton(_t(lang, "Chiudi", "Close"))
+        btn_close.clicked.connect(self.accept)
+        row.addWidget(btn_close)
+        layout.addLayout(row)
+
+    def _html(self):
+        item = self.item
+        L = self.lang
+        dtype = item.get("data_type") or "other"
+        roles = ", ".join(item.get("band_roles") or [])
+        if not roles:
+            roles = _t(L, "non dichiarati", "not declared")
+        spectral = item.get("spectral_indices") or []
+        if spectral:
+            spectral_html = "".join(
+                "<li><b>%s</b> <span>%s</span></li>" % (
+                    _html_escape(opt.get("label_it")
+                                 if L == "it" else opt.get("label_en")),
+                    _html_escape(opt.get("formula")),
+                )
+                for opt in spectral
+            )
+        else:
+            spectral_html = (
+                "<li>%s</li>" %
+                _html_escape(_t(
+                    L,
+                    "Nessun indice spettrale disponibile con le bande "
+                    "dichiarate.",
+                    "No spectral index is available from the declared bands.",
+                ))
+            )
+
+        assets_html = []
+        for asset in item.get("assets") or []:
+            roles_txt = ", ".join(asset.get("roles") or [])
+            bands_txt = ", ".join(asset.get("band_roles") or [])
+            meta = []
+            if roles_txt:
+                meta.append(roles_txt)
+            if bands_txt:
+                meta.append(_t(L, "bande: ", "bands: ") + bands_txt)
+            if asset.get("size_mb") is not None:
+                meta.append("%s MB" % asset.get("size_mb"))
+            meta_txt = " · ".join(meta)
+            href = _html_escape(asset.get("href"))
+            assets_html.append(
+                "<tr><td><b>%s</b><br><span>%s</span></td>"
+                "<td>%s</td><td><a href=\"%s\">link</a></td></tr>" % (
+                    _html_escape(asset.get("title") or asset.get("key")),
+                    _html_escape(meta_txt),
+                    _html_escape(asset.get("type")),
+                    href,
+                )
+            )
+        assets_table = "\n".join(assets_html)
+
+        style = """
+        <style>
+        body { background:#020e1a; color:#d0f0ff; font-family:Segoe UI;
+               font-size:12px; }
+        h3 { color:#00e5ff; margin:8px 0; }
+        h4 { color:#7ac8d8; margin:14px 0 6px; }
+        table { border-collapse:collapse; width:100%; }
+        td, th { border-bottom:1px solid #0a4a6e; padding:6px;
+                 vertical-align:top; }
+        th { color:#00e5ff; text-align:left; width:170px; }
+        a { color:#3b82f6; }
+        .pill { display:inline-block; border:1px solid #0a4a6e;
+                border-radius:8px; padding:3px 8px; color:#00e5ff;
+                background:#071c2e; }
+        span { color:#7ac8d8; }
+        </style>
+        """
+        return """
+        <html><head>%s</head><body>
+        <h3>%s</h3>
+        <table>
+        <tr><th>%s</th><td>%s</td></tr>
+        <tr><th>%s</th><td>%s</td></tr>
+        <tr><th>%s</th><td><span class="pill">%s %s</span></td></tr>
+        <tr><th>%s</th><td>%s</td></tr>
+        <tr><th>%s</th><td>%s</td></tr>
+        <tr><th>%s</th><td>%s</td></tr>
+        <tr><th>%s</th><td>%s</td></tr>
+        </table>
+        <h4>%s</h4><ul>%s</ul>
+        <h4>%s</h4>
+        <table><tr><th>%s</th><th>Type</th><th>URL</th></tr>%s</table>
+        </body></html>
+        """ % (
+            style,
+            _html_escape(_t(L, "Metadati", "Metadata")),
+            _html_escape(_t(L, "ID", "ID")),
+            _html_escape(item.get("id")),
+            _html_escape(_t(L, "Collezione", "Collection")),
+            _html_escape(item.get("collection")),
+            _html_escape(_t(L, "Tipo dato", "Data type")),
+            _html_escape(_data_type_icon(dtype)),
+            _html_escape(_data_type_label(L, dtype)),
+            _html_escape(_t(L, "Data", "Date")),
+            _html_escape(_item_date(item)),
+            _html_escape(_t(L, "Piattaforma", "Platform")),
+            _html_escape(item.get("platform")),
+            _html_escape(_t(L, "Risoluzione", "Resolution")),
+            _html_escape(item.get("gsd")),
+            _html_escape(_t(L, "Bande", "Bands")),
+            _html_escape(roles),
+            _html_escape(_t(L, "Indici disponibili", "Available indices")),
+            spectral_html,
+            _html_escape(_t(L, "Asset", "Assets")),
+            _html_escape(_t(L, "Nome", "Name")),
+            assets_table,
+        )
+
+
+def _build_spectral_vrt(item, option, lang="it"):
+    """Create a temporary VRT for a spectral index/composite."""
+    try:
+        from osgeo import gdal
+    except ImportError as exc:
+        raise RuntimeError(_t(
+            lang,
+            "GDAL non disponibile: impossibile creare il VRT.",
+            "GDAL is not available: cannot create the VRT.",
+        )) from exc
+    import copy
+    import tempfile
+    from defusedxml.ElementTree import (
+        fromstring as safe_xml_fromstring,
+        parse as safe_xml_parse,
+        tostring as safe_xml_tostring,
+    )
+
+    mapping = _asset_by_band_role(item)
+    roles = tuple(option.get("requires") or ())
+    hrefs = []
+    for role in roles:
+        asset = mapping.get(role)
+        if not asset:
+            raise RuntimeError(_t(
+                lang,
+                f"Banda mancante: {role}",
+                f"Missing band: {role}",
+            ))
+        href = sign_href_if_needed(asset.get("href"))
+        if href.startswith("http://") or href.startswith("https://"):
+            href = "/vsicurl/" + href
+        hrefs.append(href)
+
+    safe_id = "".join(
+        c if c.isalnum() or c in "-_" else "_"
+        for c in (_item_title(item, 48) or "stac_item")
+    )
+    out_dir = tempfile.gettempdir()
+    if option.get("key") == "false_color":
+        vrt_path = os.path.join(out_dir, safe_id + "_false_color.vrt")
+        ds = gdal.BuildVRT(vrt_path, hrefs, separate=True)
+        if ds is None:
+            raise RuntimeError("GDAL BuildVRT failed.")
+        ds = None
+        return vrt_path
+
+    stack_path = os.path.join(out_dir, safe_id + "_stack.vrt")
+    ds = gdal.BuildVRT(stack_path, hrefs, separate=True)
+    if ds is None:
+        raise RuntimeError("GDAL BuildVRT failed.")
+    ds = None
+
+    tree = safe_xml_parse(stack_path)
+    root = tree.getroot()
+    sources = []
+    for band in list(root.findall("VRTRasterBand")):
+        source = band.find("ComplexSource") or band.find("SimpleSource")
+        if source is not None:
+            sources.append(copy.deepcopy(source))
+        root.remove(band)
+    if len(sources) < 2:
+        raise RuntimeError("VRT sources missing.")
+
+    derived = safe_xml_fromstring(
+        '<VRTRasterBand dataType="Float32" band="1" '
+        'subClass="VRTDerivedRasterBand">'
+        '<NoDataValue>0</NoDataValue>'
+        '<PixelFunctionType>stac_index</PixelFunctionType>'
+        '<PixelFunctionLanguage>Python</PixelFunctionLanguage>'
+        '<PixelFunctionCode />'
+        '</VRTRasterBand>'
+    )
+    derived.find("PixelFunctionCode").text = """
+import numpy as np
+def stac_index(in_ar, out_ar, xoff, yoff, xsize, ysize, raster_xsize,
+               raster_ysize, buf_radius, gt, **kwargs):
+    a = in_ar[0].astype(np.float32)
+    b = in_ar[1].astype(np.float32)
+    den = a + b
+    with np.errstate(divide='ignore', invalid='ignore'):
+        out_ar[:] = np.where(den == 0, 0, (a - b) / den)
+"""
+    for source in sources[:2]:
+        derived.append(source)
+    root.append(derived)
+
+    gdal.SetConfigOption("GDAL_VRT_ENABLE_PYTHON", "YES")
+    index_path = os.path.join(
+        out_dir, "%s_%s.vrt" % (safe_id, option.get("key"))
+    )
+    with open(index_path, "wb") as out_f:
+        out_f.write(b'<?xml version="1.0" encoding="utf-8"?>\n')
+        out_f.write(safe_xml_tostring(root, encoding="utf-8"))
+    return index_path
+
+
+class SpectralIndexWorker(QThread):
+    progress = pyqtSignal(int, str)
+    finished = pyqtSignal(bool, str, str)
+
+    def __init__(self, item, option, output_path, lang="it", parent=None):
+        super().__init__(parent)
+        self.item = item
+        self.option = option
+        self.output_path = output_path
+        self.lang = lang
+
+    def run(self):
+        try:
+            from osgeo import gdal
+        except ImportError as exc:
+            self.finished.emit(False, str(exc), "")
+            return
+
+        try:
+            self.progress.emit(
+                2, _en_it("Preparing VRT...", "Preparazione VRT...")
+            )
+            vrt_path = _build_spectral_vrt(self.item, self.option, self.lang)
+
+            def _cb(complete, _msg, _data):
+                pct = 10 + int(max(0.0, min(1.0, complete)) * 90)
+                self.progress.emit(pct, _en_it(
+                    "Downloading/processing COG...",
+                    "Download/elaborazione COG...",
+                ))
+                return 1
+
+            self.progress.emit(
+                10, _en_it("Writing GeoTIFF...", "Scrittura GeoTIFF...")
+            )
+            gdal.UseExceptions()
+            options = gdal.TranslateOptions(
+                format="GTiff",
+                creationOptions=["COMPRESS=DEFLATE", "TILED=YES"],
+                callback=_cb,
+            )
+            ds = gdal.Translate(self.output_path, vrt_path, options=options)
+            if ds is None:
+                raise RuntimeError("GDAL Translate failed.")
+            ds = None
+            self.progress.emit(100, _en_it("Done.", "Completato."))
+            self.finished.emit(True, self.output_path, self.output_path)
+        except Exception as exc:
+            self.finished.emit(False, str(exc), "")
+
+
+class BandDownloadWorker(QThread):
+    progress = pyqtSignal(int, str)
+    finished = pyqtSignal(bool, str, object)
+
+    def __init__(self, band_assets, output_dir, auth=None, lang="it",
+                 parent=None):
+        super().__init__(parent)
+        self.band_assets = band_assets
+        self.output_dir = output_dir
+        self.auth = auth or {}
+        self.lang = lang
+
+    def run(self):
+        saved = []
+        total = max(1, len(self.band_assets))
+        try:
+            for idx, (role, asset) in enumerate(self.band_assets):
+                title = asset.get("title") or asset.get("key") or role
+                href = asset.get("href") or ""
+                base = os.path.basename(href.split("?")[0])
+                if not base:
+                    base = "%s.tif" % (asset.get("key") or role)
+                stem, ext = os.path.splitext(base)
+                if not ext:
+                    ext = ".tif"
+                safe_stem = "".join(
+                    c if c.isalnum() or c in "-_" else "_"
+                    for c in "%s_%s" % (role, stem)
+                )
+                out_path = os.path.join(self.output_dir, safe_stem + ext)
+
+                def _cb(done, file_total, i=idx, name=title):
+                    file_pct = 0.0
+                    status = _en_it(f"Downloading {name}",
+                                    f"Scaricando {name}")
+                    if file_total > 0:
+                        file_pct = min(1.0, float(done) / float(file_total))
+                        done_mb = done / (1024 * 1024)
+                        total_mb = file_total / (1024 * 1024)
+                        status += " · %.1f / %.1f MB" % (done_mb, total_mb)
+                    else:
+                        done_mb = done / (1024 * 1024)
+                        status += " · %.1f MB" % done_mb
+                    percent = int(((i + file_pct) / total) * 100)
+                    self.progress.emit(percent, status)
+
+                self.progress.emit(
+                    int((idx / total) * 100),
+                    _en_it(f"Preparing {title}", f"Preparazione {title}"),
+                )
+                download_asset(
+                    href, out_path, progress_callback=_cb, auth=self.auth
+                )
+                saved.append((role, out_path))
+            self.progress.emit(100, _t(
+                self.lang,
+                "Bands saved. / Bande salvate.",
+                "Bands saved. / Bande salvate.",
+            ))
+            self.finished.emit(True, self.output_dir, saved)
+        except Exception as exc:
+            self.finished.emit(False, str(exc), saved)
+
+
+class _SpectralProgressDialog(QDialog):
+    def __init__(self, worker, lang="it", title=None, message=None,
+                 parent=None):
+        super().__init__(parent)
+        self._lang = lang
+        self._worker = worker
+        self.success = False
+        self.result_path = None
+        self.result = None
+        self._progress = 0
+        self._started_at = time.monotonic()
+        self.setWindowTitle(
+            title or _en_it("Processing index", "Elaborazione indice")
+        )
+        self.setModal(True)
+        self.resize(430, 210)
+        self.setStyleSheet(OCEAN_STYLE)
+
+        layout = QVBoxLayout(self)
+        layout.setAlignment(QtCompat.AlignCenter)
+
+        self.logo, self._opacity = _make_progress_logo(64)
+        layout.addWidget(self.logo)
+        self._fade_up = False
+        self._timer = QTimer(self)
+        self._timer.timeout.connect(self._pulse)
+        self._timer.start(90)
+
+        self.lbl = QLabel(message or _en_it(
+            "Downloading and processing data...",
+            "Download ed elaborazione del dato in corso...",
+        ))
+        self.lbl.setAlignment(QtCompat.AlignCenter)
+        self.lbl.setStyleSheet("color:#d0f0ff;")
+        layout.addWidget(self.lbl)
+
+        self.bar = QProgressBar()
+        self.bar.setRange(0, 100)
+        self.bar.setValue(0)
+        layout.addWidget(self.bar)
+
+        self.lbl_status = QLabel("")
+        self.lbl_status.setStyleSheet("color:#4a8090; font-size:11px;")
+        layout.addWidget(self.lbl_status)
+
+        self.btn_close = QPushButton(_en_it("Close", "Chiudi"))
+        self.btn_close.setEnabled(False)
+        self.btn_close.clicked.connect(self.accept)
+        layout.addWidget(self.btn_close)
+
+        worker.progress.connect(self._on_progress)
+        worker.finished.connect(self._on_finished)
+        worker.start()
+
+    def _pulse(self):
+        self._fade_up = _pulse_logo_opacity(
+            self._opacity, self._fade_up, self._progress
+        )
+        interval = max(28, 90 - int(self._progress * 0.6))
+        if interval != self._timer.interval():
+            self._timer.setInterval(interval)
+
+    def _on_progress(self, percent, message):
+        self._progress = max(0, min(100, percent))
+        self.bar.setValue(self._progress)
+        elapsed = _format_elapsed(time.monotonic() - self._started_at)
+        self.lbl_status.setText("%s · %s: %s" % (
+            message,
+            _en_it("time", "tempo"),
+            elapsed,
+        ))
+
+    def _on_finished(self, success, message, result):
+        elapsed = _format_elapsed(time.monotonic() - self._started_at)
+        self._timer.stop()
+        self._opacity.setOpacity(1.0)
+        self.success = success
+        self.result = result if success else None
+        self.result_path = (
+            result if success and isinstance(result, str) else None
+        )
+        if success:
+            self.bar.setValue(100)
+            if isinstance(result, list):
+                self.lbl.setText(_en_it("Bands saved.", "Bande salvate."))
+            else:
+                self.lbl.setText(_en_it("Index saved.", "Indice salvato."))
+            self.lbl_status.setText("%s · %s: %s" % (
+                message,
+                _en_it("total time", "tempo totale"),
+                elapsed,
+            ))
+            self.btn_close.setEnabled(True)
+            QTimer.singleShot(1200, self.accept)
+        else:
+            self.lbl.setText(_en_it("Processing error",
+                                    "Errore elaborazione"))
+            self.lbl_status.setText("%s · %s: %s" % (
+                message[:180],
+                _en_it("time", "tempo"),
+                elapsed,
+            ))
+            self.btn_close.setEnabled(True)
+
+
+class _BandSelectionDialog(QDialog):
+    def __init__(self, band_assets, lang="it", parent=None):
+        super().__init__(parent)
+        self.lang = lang
+        self.band_assets = band_assets
+        self.checks = []
+        self.setWindowTitle(_en_it("Choose bands", "Scegli bande"))
+        self.resize(480, 360)
+        self.setStyleSheet(OCEAN_STYLE)
+
+        layout = QVBoxLayout(self)
+        title = QLabel(_en_it(
+            "Select bands to download",
+            "Seleziona le bande da scaricare",
+        ))
+        title.setStyleSheet("color:#00e5ff; font-size:14px; font-weight:700;")
+        layout.addWidget(title)
+
+        note = QLabel(_en_it(
+            "You can download all bands or only the useful ones. Bands will "
+            "be saved locally before loading into QGIS.",
+            "Puoi scaricarle tutte o solo quelle utili. Le bande verranno "
+            "salvate localmente prima del caricamento in QGIS.",
+        ))
+        note.setWordWrap(True)
+        note.setStyleSheet("color:#7ac8d8; font-size:12px;")
+        layout.addWidget(note)
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        content = QWidget()
+        box = QVBoxLayout(content)
+        box.setSpacing(6)
+        for role, asset in band_assets:
+            label = "%s · %s" % (
+                role.upper(),
+                asset.get("title") or asset.get("key") or asset.get("href"),
+            )
+            chk = QCheckBox(label)
+            chk.setChecked(True)
+            chk.toggled.connect(self._update_accept)
+            chk.setToolTip(asset.get("href") or "")
+            box.addWidget(chk)
+            self.checks.append((chk, role, asset))
+        box.addStretch()
+        scroll.setWidget(content)
+        layout.addWidget(scroll, 1)
+
+        select_row = QHBoxLayout()
+        btn_all = QPushButton(_en_it("All", "Tutte"))
+        btn_all.clicked.connect(lambda: self._set_all(True))
+        select_row.addWidget(btn_all)
+        btn_none = QPushButton(_en_it("None", "Nessuna"))
+        btn_none.clicked.connect(lambda: self._set_all(False))
+        select_row.addWidget(btn_none)
+        select_row.addStretch()
+        layout.addLayout(select_row)
+
+        row = QHBoxLayout()
+        row.addStretch()
+        self.btn_ok = QPushButton(_en_it("Download selected",
+                                         "Scarica selezionate"))
+        self.btn_ok.clicked.connect(self.accept)
+        row.addWidget(self.btn_ok)
+        btn_cancel = QPushButton(_en_it("Cancel", "Annulla"))
+        btn_cancel.clicked.connect(self.reject)
+        row.addWidget(btn_cancel)
+        layout.addLayout(row)
+        self._update_accept()
+
+    def _set_all(self, checked):
+        for chk, _role, _asset in self.checks:
+            chk.setChecked(checked)
+        self._update_accept()
+
+    def _update_accept(self):
+        self.btn_ok.setEnabled(any(chk.isChecked()
+                                   for chk, _r, _a in self.checks))
+
+    def selected_bands(self):
+        return [
+            (role, asset)
+            for chk, role, asset in self.checks
+            if chk.isChecked()
+        ]
+
+
+class _SpectralCompareDialog(QDialog):
+    """Explicitly save COG-backed spectral indices before QGIS loading."""
+
+    def __init__(self, item, lang="it", auth=None, parent=None):
+        super().__init__(parent)
+        self.item = item
+        self.lang = lang
+        self.auth = auth or {}
+        self.setWindowTitle(_en_it("COG spectral indices",
+                                   "Indici spettrali COG"))
+        self.resize(560, 420)
+        self.setStyleSheet(OCEAN_STYLE)
+
+        layout = QVBoxLayout(self)
+        title = QLabel(_item_title(item, 82))
+        title.setWordWrap(True)
+        title.setStyleSheet("color:#00e5ff; font-size:14px; font-weight:700;")
+        layout.addWidget(title)
+
+        intro = QLabel(_en_it(
+            "NDVI, NDWI and False Color can read large portions of remote "
+            "COGs and slow QGIS down. For safety they are computed only if "
+            "you enable the flag below and are saved as a local GeoTIFF.",
+            "Gli indici NDVI, NDWI e Falso Colore possono leggere molte "
+            "porzioni di COG remoti e rallentare QGIS. Per sicurezza vengono "
+            "calcolati solo se abiliti il flag sotto e vengono salvati come "
+            "GeoTIFF locale.",
+        ))
+        intro.setWordWrap(True)
+        intro.setStyleSheet("color:#7ac8d8; font-size:12px;")
+        layout.addWidget(intro)
+
+        self.index_buttons = []
+        self.chk_enable = QCheckBox(_en_it(
+            "Enable index download/processing and local save",
+            "Abilita download/elaborazione indici e salvataggio locale",
+        ))
+        self.chk_enable.setChecked(False)
+        self.chk_enable.setStyleSheet("color:#f59e0b; font-size:12px;")
+        self.chk_enable.toggled.connect(self._toggle_index_buttons)
+        layout.addWidget(self.chk_enable)
+
+        self.options = item.get("spectral_indices") or []
+        if self.options:
+            for opt in self.options:
+                layout.addWidget(self._option_widget(opt))
+        else:
+            missing = QLabel(_en_it(
+                "This record does not declare enough red/green/NIR bands to "
+                "compute the indices.",
+                "Questo record non dichiara una combinazione sufficiente di "
+                "bande red/green/NIR per calcolare gli indici.",
+            ))
+            missing.setWordWrap(True)
+            missing.setStyleSheet(
+                "background:rgba(245,158,11,0.08);"
+                "border:1px solid rgba(245,158,11,0.35);"
+                "border-radius:6px; padding:8px; color:#f59e0b;"
+            )
+            layout.addWidget(missing)
+
+        layout.addStretch()
+        row = QHBoxLayout()
+        btn_bands = QPushButton(_en_it("💾 Choose COG bands",
+                                       "💾 Scegli bande COG"))
+        btn_bands.clicked.connect(self._load_declared_bands)
+        btn_bands.setEnabled(bool(self._available_band_assets()))
+        btn_bands.setToolTip(_en_it(
+            "Choose all bands or only some of them, then save them locally.",
+            "Scegli tutte o solo alcune bande, poi salvale localmente.",
+        ))
+        row.addWidget(btn_bands)
+        row.addStretch()
+        btn_close = QPushButton(_en_it("Close", "Chiudi"))
+        btn_close.clicked.connect(self.accept)
+        row.addWidget(btn_close)
+        layout.addLayout(row)
+        self._toggle_index_buttons(self.chk_enable.isChecked())
+
+    def _option_widget(self, opt):
+        frame = QFrame()
+        frame.setStyleSheet(
+            "QFrame { background:#071c2e; border:1px solid #0a4a6e;"
+            "border-radius:8px; } QLabel { background:transparent; }"
+        )
+        box = QVBoxLayout(frame)
+        box.setContentsMargins(10, 8, 10, 8)
+
+        label = _en_it(opt.get("label_en"), opt.get("label_it"))
+        lbl = QLabel("<b style='color:#00e5ff;'>%s</b><br>"
+                     "<span style='color:#7ac8d8;'>%s</span>" % (
+                         _html_escape(label), _html_escape(opt.get("formula"))
+                     ))
+        lbl.setTextFormat(QtCompat.RichText)
+        box.addWidget(lbl)
+
+        assets = opt.get("asset_keys") or {}
+        bands = " · ".join("%s: %s" % (k.upper(), v)
+                           for k, v in assets.items())
+        lbl_assets = QLabel(bands)
+        lbl_assets.setWordWrap(True)
+        lbl_assets.setStyleSheet("color:#4a8090; font-size:11px;")
+        box.addWidget(lbl_assets)
+
+        row = QHBoxLayout()
+        row.addStretch()
+        btn = QPushButton(_en_it("💾 Save index", "💾 Salva indice"))
+        btn.setEnabled(False)
+        btn.setToolTip(_en_it(
+            "Download/process the index and save it as a local GeoTIFF.",
+            "Scarica/elabora l'indice e salvalo come GeoTIFF locale.",
+        ))
+        btn.clicked.connect(lambda _c, o=opt: self._save_index(o))
+        row.addWidget(btn)
+        self.index_buttons.append(btn)
+        box.addLayout(row)
+        return frame
+
+    def _toggle_index_buttons(self, enabled):
+        for btn in self.index_buttons:
+            btn.setEnabled(bool(enabled))
+
+    def _available_band_assets(self):
+        roles_order = ("blue", "green", "red", "nir", "swir16", "swir22")
+        selected = []
+        seen = set()
+        assets = self.item.get("assets") or []
+        for role in roles_order:
+            for asset in assets:
+                if not asset.get("is_raster"):
+                    continue
+                if role not in (asset.get("band_roles") or []):
+                    continue
+                uid = asset.get("href") or asset.get("key") or id(asset)
+                if uid in seen:
+                    continue
+                seen.add(uid)
+                selected.append((role, asset))
+        return selected
+
+    def _load_declared_bands(self):
+        band_assets = self._available_band_assets()
+        if not band_assets:
+            return
+        sel = _BandSelectionDialog(
+            band_assets, lang=self.lang, parent=self
+        )
+        if not sel.exec():
+            return
+        selected = sel.selected_bands()
+        if not selected:
+            return
+        QMessageBox.information(
+            self,
+            "STAC Browser",
+            _t(
+                self.lang,
+                "Choose a destination folder. The selected bands will be "
+                "downloaded one by one with logo, percentage and load time. / "
+                "Scegli una cartella di destinazione. Le bande selezionate "
+                "verranno scaricate una alla volta, con logo, percentuale e "
+                "tempo di caricamento.",
+                "Choose a destination folder. The selected bands will be "
+                "downloaded one by one with logo, percentage and load time. / "
+                "Scegli una cartella di destinazione. Le bande selezionate "
+                "verranno scaricate una alla volta, con logo, percentuale e "
+                "tempo di caricamento.",
+            ),
+        )
+        out_dir = QFileDialog.getExistingDirectory(
+            self,
+            _en_it("Folder for bands", "Cartella per le bande"),
+        )
+        if not out_dir:
+            return
+        worker = BandDownloadWorker(
+            selected, out_dir, auth=self.auth, lang=self.lang, parent=self
+        )
+        dlg = _SpectralProgressDialog(
+            worker,
+            lang=self.lang,
+            title=_en_it("COG band download", "Download bande COG"),
+            message=_en_it(
+                "Saving selected bands locally...",
+                "Salvataggio locale delle bande selezionate...",
+            ),
+            parent=self,
+        )
+        dlg.exec()
+        if not dlg.success or not dlg.result:
+            return
+        QMessageBox.information(
+            self,
+            "STAC Browser",
+            _t(
+                self.lang,
+                "Bands saved. Keep them locally to avoid new heavy remote "
+                "loads in QGIS. / Bande salvate. Conservale localmente per "
+                "evitare nuovi caricamenti remoti pesanti in QGIS.",
+                "Bands saved. Keep them locally to avoid new heavy remote "
+                "loads in QGIS. / Bande salvate. Conservale localmente per "
+                "evitare nuovi caricamenti remoti pesanti in QGIS.",
+            ),
+        )
+        if _HAS_QGIS:
+            for role, path in dlg.result:
+                layer_name = "%s %s" % (
+                    _item_title(self.item, 36), role.upper()
+                )
+                layer = QgsRasterLayer(path, layer_name)
+                if layer.isValid():
+                    QgsProject.instance().addMapLayer(layer)
+
+    def _save_index(self, option):
+        if not self.chk_enable.isChecked():
+            return
+        QMessageBox.information(
+            self,
+            "STAC Browser",
+            _t(
+                self.lang,
+                "Choose where to save the local GeoTIFF. The plugin will "
+                "read the remote COGs and compute the index: this can take "
+                "time depending on data size and network speed. / Ora scegli "
+                "dove salvare il GeoTIFF locale. Il plugin leggerà i COG "
+                "remoti e calcolerà l'indice: l'operazione può richiedere "
+                "tempo in base alla dimensione del dato e alla connessione.",
+                "Choose where to save the local GeoTIFF. The plugin will "
+                "read the remote COGs and compute the index: this can take "
+                "time depending on data size and network speed. / Ora scegli "
+                "dove salvare il GeoTIFF locale. Il plugin leggerà i COG "
+                "remoti e calcolerà l'indice: l'operazione può richiedere "
+                "tempo in base alla dimensione del dato e alla connessione.",
+            ),
+        )
+        label = _en_it(option.get("label_en"), option.get("label_it"))
+        base = "%s_%s.tif" % (
+            _item_title(self.item, 40),
+            option.get("key") or "index",
+        )
+        safe_name = "".join(
+            c if c.isalnum() or c in "-_." else "_"
+            for c in base
+        )
+        out_path, _ = QFileDialog.getSaveFileName(
+            self,
+            _en_it(f"Save {label}", f"Salva {label}"),
+            safe_name,
+            "GeoTIFF (*.tif)",
+        )
+        if not out_path:
+            return
+        worker = SpectralIndexWorker(
+            self.item, option, out_path, lang=self.lang, parent=self
+        )
+        dlg = _SpectralProgressDialog(worker, lang=self.lang, parent=self)
+        dlg.exec()
+        if dlg.success and dlg.result_path:
+            QMessageBox.information(
+                self,
+                "STAC Browser",
+                _t(
+                    self.lang,
+                    f"Data saved: {dlg.result_path}\n\n"
+                    "Keep this local file: it avoids recalculating the index "
+                    "and reduces the risk of slowing QGIS down.\n\n"
+                    f"Dato salvato: {dlg.result_path}\n\n"
+                    "Conserva questo file locale: evita di ricalcolare "
+                    "l'indice e riduce il rischio di rallentamenti in QGIS.",
+                    f"Data saved: {dlg.result_path}\n\n"
+                    "Keep this local file: it avoids recalculating the index "
+                    "and reduces the risk of slowing QGIS down.\n\n"
+                    f"Dato salvato: {dlg.result_path}\n\n"
+                    "Conserva questo file locale: evita di ricalcolare "
+                    "l'indice e riduce il rischio di rallentamenti in QGIS.",
+                ),
+            )
+            if _HAS_QGIS:
+                layer = QgsRasterLayer(dlg.result_path, label)
+                if layer.isValid():
+                    QgsProject.instance().addMapLayer(layer)
+
+    def _add_vrt(self, option):
+        if not _HAS_QGIS:
+            return
+        try:
+            vrt_path = _build_spectral_vrt(self.item, option, self.lang)
+            layer_name = "%s %s" % (
+                _item_title(self.item, 36),
+                option.get("label_it")
+                if self.lang == "it" else option.get("label_en"),
+            )
+            layer = QgsRasterLayer(vrt_path, layer_name)
+            if not layer.isValid():
+                raise RuntimeError(_t(
+                    self.lang,
+                    "Il VRT è stato creato ma QGIS non lo considera valido.",
+                    "The VRT was created but QGIS does not consider it valid.",
+                ))
+            QgsProject.instance().addMapLayer(layer)
+            if _iface:
+                _iface.messageBar().pushSuccess(
+                    "STAC Browser",
+                    _t(self.lang, "Indice aggiunto a QGIS.",
+                       "Index added to QGIS."),
+                )
+        except Exception as exc:
+            QMessageBox.warning(self, "STAC Browser", str(exc))
+
+    def _build_vrt(self, option):
+        return _build_spectral_vrt(self.item, option, self.lang)
+
+
 class ItemCard(QFrame):
     """A compact card widget showing a single STAC item."""
 
     def __init__(self, item, lang="it", preview_cache=None,
-                 catalog=None, auth=None, controller=None, parent=None):
+                 catalog=None, auth=None, controller=None,
+                 details_callback=None, spectral_callback=None, parent=None):
         super().__init__(parent)
         self.item = item
         self.lang = lang
@@ -678,6 +1732,8 @@ class ItemCard(QFrame):
         self.catalog = catalog or {}
         self.auth = auth or {}
         self.controller = controller
+        self.details_callback = details_callback
+        self.spectral_callback = spectral_callback
         self._preview_label = None
         self._fetcher = None
 
@@ -712,11 +1768,27 @@ class ItemCard(QFrame):
         if collection:
             lbl_col = QLabel(collection)
             lbl_col.setStyleSheet(
-                "background:rgba(52,211,153,0.12); color:#00e5ff; padding:2px 8px;"
+                "background:rgba(52,211,153,0.12); color:#00e5ff;"
+                "padding:2px 8px;"
                 "border-radius:8px; font-size:10px; font-weight:600;"
             )
             lbl_col.setAlignment(QtCompat.AlignCenter)
             layout.addWidget(lbl_col)
+
+        dtype = item.get("data_type") or "other"
+        lbl_dtype = QLabel(
+            "%s %s" % (
+                _data_type_icon(dtype),
+                _data_type_label(lang, dtype),
+            )
+        )
+        lbl_dtype.setStyleSheet(
+            "background:rgba(0,229,255,0.08); color:#7ac8d8;"
+            "padding:2px 8px; border-radius:8px; font-size:10px;"
+            "font-weight:600;"
+        )
+        lbl_dtype.setAlignment(QtCompat.AlignCenter)
+        layout.addWidget(lbl_dtype)
 
         # Item ID (truncated)
         item_id = item.get("id") or "—"
@@ -770,11 +1842,24 @@ class ItemCard(QFrame):
             lbl_metrics.setWordWrap(True)
             layout.addWidget(lbl_metrics)
 
+        band_roles = item.get("band_roles") or []
+        if band_roles:
+            lbl_roles = QLabel(
+                "%s%s" % (
+                    _t(lang, "Canali: ", "Channels: "),
+                    ", ".join(role.upper() for role in band_roles[:6]),
+                )
+            )
+            lbl_roles.setStyleSheet("color:#4a8090; font-size:10px;")
+            lbl_roles.setWordWrap(True)
+            layout.addWidget(lbl_roles)
+
         # Assets list (max 6)
         assets = item.get("assets") or []
         if assets:
             lbl_assets_title = QLabel(_t(lang, "Asset:", "Assets:"))
-            lbl_assets_title.setStyleSheet("color:#4a8090; font-size:10px; margin-top:4px;")
+            lbl_assets_title.setStyleSheet(
+                "color:#4a8090; font-size:10px; margin-top:4px;")
             layout.addWidget(lbl_assets_title)
 
             for a in assets[:6]:
@@ -784,13 +1869,37 @@ class ItemCard(QFrame):
                 color = "#00e5ff" if a.get("is_raster") else "#4a8090"
                 size_mb = a.get("size_mb")
                 size_str = f" ({size_mb} MB)" if size_mb is not None else ""
-                lbl_a = QLabel(f'<span style="color:{color}">{icon}</span>'
-                               f' <span style="font-size:10px;">{a_title[:28]}{size_str}</span>')
+                lbl_a = QLabel(
+                    f'<span style="color:{color}">{icon}</span>'
+                    f' <span style="font-size:10px;">'
+                    f'{a_title[:28]}{size_str}</span>')
                 lbl_a.setStyleSheet("color:#7ac8d8;")
                 lbl_a.setToolTip(f"{a_title}\n{a_type}\n{a.get('href', '')}")
                 layout.addWidget(lbl_a)
 
         layout.addStretch()
+
+        tool_row = QHBoxLayout()
+        tool_row.setSpacing(4)
+        btn_details = QPushButton(_t(lang, "ℹ Dettagli", "ℹ Details"))
+        btn_details.setObjectName("btnDetails")
+        btn_details.setToolTip(
+            _t(lang, "Apri metadati e asset", "Open metadata and assets")
+        )
+        btn_details.clicked.connect(self._show_details)
+        tool_row.addWidget(btn_details)
+
+        btn_spectral = QPushButton(_t(lang, "🧪 Indici", "🧪 Indices"))
+        btn_spectral.setObjectName("btnSpectral")
+        btn_spectral.setToolTip(_t(
+            lang,
+            "Confronta NDVI, NDWI e Falso Colore da COG",
+            "Compare NDVI, NDWI and False Color from COGs",
+        ))
+        btn_spectral.setEnabled(bool(item.get("spectral_indices")))
+        btn_spectral.clicked.connect(self._show_spectral)
+        tool_row.addWidget(btn_spectral)
+        layout.addLayout(tool_row)
 
         # Action buttons
         btn_row = QHBoxLayout()
@@ -803,13 +1912,15 @@ class ItemCard(QFrame):
         # the plugin never fetches a login page by mistake.
         auth_required = bool(self.catalog.get("auth"))
         has_creds = bool(
-            self.auth.get("token")
-            or (self.auth.get("username") and self.auth.get("password"))
+            self.auth.get("token") or (
+                self.auth.get("username") and self.auth.get("password")
+            )
         )
 
         if auth_required and not has_creds:
             btn_portal = QPushButton(
-                _t(lang, "🔐 Registrazione richiesta", "🔐 Registration required")
+                _t(lang, "🔐 Registrazione richiesta",
+                   "🔐 Registration required")
             )
             btn_portal.setObjectName("btnPortal")
             btn_portal.setToolTip(
@@ -845,7 +1956,8 @@ class ItemCard(QFrame):
             )
             btn_dl.setEnabled(best is not None)
             btn_dl.clicked.connect(
-                lambda _checked, i=item, a=best: self._on_action("download", i, a)
+                lambda _checked, i=item, a=best:
+                self._on_action("download", i, a)
             )
             btn_row.addWidget(btn_dl)
 
@@ -853,6 +1965,14 @@ class ItemCard(QFrame):
 
         # Load preview
         self._load_preview()
+
+    def _show_details(self):
+        if self.details_callback:
+            self.details_callback(self.item)
+
+    def _show_spectral(self):
+        if self.spectral_callback:
+            self.spectral_callback(self.item)
 
     def _load_preview(self):
         url = self.item.get("preview")
@@ -882,8 +2002,10 @@ class ItemCard(QFrame):
 
     def _on_action(self, action, item, asset):
         """Route a card action: clip via controller, or full add/download."""
-        if (self.controller is not None
-                and self.controller.is_clip_mode()):
+        if (
+            self.controller is not None
+            and self.controller.is_clip_mode()
+        ):
             self.controller.start_clip(item, asset, self.auth, action)
             return
         if action == "add":
@@ -904,7 +2026,10 @@ class ItemCard(QFrame):
                 if _iface:
                     _iface.messageBar().pushSuccess(
                         "STAC Browser",
-                        f"Layer aggiunto: {item.get('id', '')}",
+                        _en_it(
+                            f"Layer added: {item.get('id', '')}",
+                            f"Layer aggiunto: {item.get('id', '')}",
+                        ),
                     )
             else:
                 if _iface:
@@ -912,7 +2037,8 @@ class ItemCard(QFrame):
                         "STAC Browser",
                         _t(self.lang,
                            "Layer non valido: l'asset potrebbe richiedere "
-                           "un login presso il provider (USGS/NASA/Copernicus).",
+                           "un login presso il provider "
+                           "(USGS/NASA/Copernicus).",
                            "Invalid layer: the asset may require a provider "
                            "login (USGS/NASA/Copernicus)."),
                     )
@@ -952,8 +2078,19 @@ class _DownloadProgressDialog(QDialog):
         self.setStyleSheet(OCEAN_STYLE)
 
         layout = QVBoxLayout(self)
+        layout.setAlignment(QtCompat.AlignCenter)
+        self.logo, self._opacity = _make_progress_logo(56)
+        layout.addWidget(self.logo)
+        self._fade_up = False
+        self._progress = 0
+        self._timer = QTimer(self)
+        self._timer.timeout.connect(self._pulse)
+        self._timer.start(90)
+
         fname = os.path.basename(output_path)
-        self.lbl = QLabel(_t(lang, f"Scaricando {fname}...", f"Downloading {fname}..."))
+        self.lbl = QLabel(
+            _t(lang, f"Scaricando {fname}...", f"Downloading {fname}..."))
+        self.lbl.setAlignment(QtCompat.AlignCenter)
         self.lbl.setStyleSheet("color:#d0f0ff;")
         layout.addWidget(self.lbl)
 
@@ -971,42 +2108,80 @@ class _DownloadProgressDialog(QDialog):
         btn_cancel.clicked.connect(self._cancel)
         layout.addWidget(btn_cancel)
 
-        self._worker = DownloadWorker(href, output_path, auth=auth, parent=self)
+        self._worker = DownloadWorker(
+            href, output_path, auth=auth, parent=self)
         self._worker.progress.connect(self._on_progress)
         self._worker.finished.connect(self._on_finished)
         self._worker.start()
         self._lang = lang
         self._cancelled = False
+        self._started_at = time.monotonic()
+
+    def _pulse(self):
+        self._fade_up = _pulse_logo_opacity(
+            self._opacity, self._fade_up, self._progress
+        )
+        interval = max(28, 90 - int(self._progress * 0.6))
+        if interval != self._timer.interval():
+            self._timer.setInterval(interval)
 
     def _on_progress(self, done, total):
+        elapsed = _format_elapsed(time.monotonic() - self._started_at)
         if total > 0:
             pct = int(done * 100 / total)
+            self._progress = max(0, min(100, pct))
             self.bar.setRange(0, 100)
             self.bar.setValue(pct)
             done_mb = done / (1024 * 1024)
             total_mb = total / (1024 * 1024)
-            self.lbl_status.setText(f"{done_mb:.1f} / {total_mb:.1f} MB")
+            self.lbl_status.setText(
+                f"{done_mb:.1f} / {total_mb:.1f} MB · "
+                f"{_t(self._lang, 'tempo', 'time')}: {elapsed}"
+            )
         else:
             self.bar.setRange(0, 0)
             done_mb = done / (1024 * 1024)
-            self.lbl_status.setText(f"{done_mb:.1f} MB")
+            self.lbl_status.setText(
+                f"{done_mb:.1f} MB · "
+                f"{_t(self._lang, 'tempo', 'time')}: {elapsed}"
+            )
 
     def _on_finished(self, success, message):
+        elapsed = _format_elapsed(time.monotonic() - self._started_at)
+        self._timer.stop()
+        self._opacity.setOpacity(1.0)
         if success:
-            self.lbl.setText(_t(self._lang, "Download completato!", "Download complete!"))
-            self.lbl_status.setText(message)
+            self.lbl.setText(
+                _t(self._lang, "Download completato!",
+                   "Download complete!"))
+            self.lbl_status.setText(
+                "%s · %s: %s" % (
+                    message,
+                    _t(self._lang, "tempo totale", "total time"),
+                    elapsed,
+                )
+            )
             if _iface:
                 _iface.messageBar().pushSuccess(
                     "STAC Browser",
                     _t(self._lang, f"Salvato: {message}", f"Saved: {message}"),
                 )
         else:
-            self.lbl.setText(_t(self._lang, "Errore download", "Download error"))
-            self.lbl_status.setText(message)
+            self.lbl.setText(
+                _t(self._lang, "Errore download", "Download error"))
+            self.lbl_status.setText(
+                "%s · %s: %s" % (
+                    message,
+                    _t(self._lang, "tempo", "time"),
+                    elapsed,
+                )
+            )
         QTimer.singleShot(1500, self.accept)
 
     def _cancel(self):
         self._cancelled = True
+        if hasattr(self, "_timer"):
+            self._timer.stop()
         if self._worker and self._worker.isRunning():
             self._worker.terminate()
         self.reject()
@@ -1029,6 +2204,7 @@ class _ProcessingDialog(QDialog):
         self._lang = lang
         self._worker = worker
         self._progress = 0
+        self._started_at = time.monotonic()
         self.result_path = None
         self.success = False
 
@@ -1100,9 +2276,17 @@ class _ProcessingDialog(QDialog):
     def _on_progress(self, percent, _total):
         self._progress = max(0, min(100, percent))
         self.bar.setValue(self._progress)
-        self.lbl_status.setText(f"{self._progress}%")
+        elapsed = _format_elapsed(time.monotonic() - self._started_at)
+        self.lbl_status.setText(
+            "%s%% · %s: %s" % (
+                self._progress,
+                _t(self._lang, "tempo", "time"),
+                elapsed,
+            )
+        )
 
     def _on_finished(self, success, message):
+        elapsed = _format_elapsed(time.monotonic() - self._started_at)
         self._timer.stop()
         self._opacity.setOpacity(1.0)
         self.success = success
@@ -1110,9 +2294,21 @@ class _ProcessingDialog(QDialog):
             self.result_path = message
             self.bar.setValue(100)
             self.lbl.setText(_t(self._lang, "Completato!", "Done!"))
+            self.lbl_status.setText(
+                "%s: %s" % (
+                    _t(self._lang, "Tempo totale", "Total time"),
+                    elapsed,
+                )
+            )
         else:
             self.lbl.setText(_t(self._lang, "Errore", "Error"))
-            self.lbl_status.setText(message[:200])
+            self.lbl_status.setText(
+                "%s · %s: %s" % (
+                    message[:160],
+                    _t(self._lang, "tempo", "time"),
+                    elapsed,
+                )
+            )
         QTimer.singleShot(900 if success else 2200, self.accept)
 
 
@@ -1135,8 +2331,8 @@ class StacBrowserDialog(QDialog):
         super().__init__(parent)
         self.lang = lang
         self.setWindowTitle("GeoFusion — STAC Browser")
-        self.resize(1100, 800)
-        self.setMinimumSize(QSize(880, 600))
+        self.resize(1180, 820)
+        self.setMinimumSize(QSize(760, 540))
         self.setStyleSheet(OCEAN_STYLE)
 
         # State
@@ -1148,6 +2344,8 @@ class StacBrowserDialog(QDialog):
         self._errors = {}           # catalog_id -> error string
         self._preview_cache = {}    # url -> QPixmap
         self._preview_fetchers = []
+        self._last_result_col_count = 0
+        self._resize_rerender_pending = False
         # catalog_id -> {"username", "password", "token"} for auth catalogs
         self._credentials = {}
         self._load_credentials()
@@ -1212,6 +2410,29 @@ class StacBrowserDialog(QDialog):
 
         self.chk_auto.toggled.connect(self._on_auto_toggled)
         self._on_auto_toggled(self.chk_auto.isChecked())
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        if not getattr(self, "_results", None):
+            return
+        if not hasattr(self, "scroll_area"):
+            return
+        new_count = self._result_column_count()
+        if new_count == self._last_result_col_count:
+            return
+        if self._resize_rerender_pending:
+            return
+        self._resize_rerender_pending = True
+        QTimer.singleShot(140, self._rerender_results_after_resize)
+
+    def _rerender_results_after_resize(self):
+        self._resize_rerender_pending = False
+        if not getattr(self, "_results", None):
+            return
+        new_count = self._result_column_count()
+        if new_count == self._last_result_col_count:
+            return
+        self._rerender_results()
 
     def _on_auto_toggled(self, auto):
         """Grey out the manual catalog/collection pickers in automatic mode."""
@@ -1286,7 +2507,9 @@ class StacBrowserDialog(QDialog):
             else:
                 QMessageBox.warning(
                     self, "STAC Browser",
-                    _t(L, "Nessuna area di interesse definita per il ritaglio.",
+                    _t(L,
+                       "Nessuna area di interesse definita "
+                       "per il ritaglio.",
                        "No area of interest defined for clipping."),
                 )
                 return
@@ -1311,8 +2534,8 @@ class StacBrowserDialog(QDialog):
             comune_query=comune_query, cutline_geojson=cutline_geojson,
             parent=self,
         )
-        icon_path = os.path.join(os.path.dirname(__file__), "icon.svg")
-        dlg = _ProcessingDialog(worker, icon_path, lang=L, parent=self)
+        dlg = _ProcessingDialog(worker, _plugin_icon_path(),
+                                lang=L, parent=self)
         dlg.exec()
 
         if dlg.success and dlg.result_path:
@@ -1511,7 +2734,8 @@ class StacBrowserDialog(QDialog):
         self.cb_output = QComboBox()
         self.cb_output.addItem("", "full")
         self.cb_output.addItem("", "clip")
-        self.cb_output.currentIndexChanged.connect(self._on_output_mode_changed)
+        self.cb_output.currentIndexChanged.connect(
+            self._on_output_mode_changed)
         mode_row.addWidget(self.cb_output, 1)
         out_layout.addLayout(mode_row)
 
@@ -1545,7 +2769,8 @@ class StacBrowserDialog(QDialog):
         # Scroll area for cards
         self.scroll_area = QScrollArea()
         self.scroll_area.setWidgetResizable(True)
-        self.scroll_area.setHorizontalScrollBarPolicy(QtCompat.ScrollBarAsNeeded)
+        self.scroll_area.setHorizontalScrollBarPolicy(
+            QtCompat.ScrollBarAsNeeded)
         self.scroll_area.setVerticalScrollBarPolicy(QtCompat.ScrollBarAsNeeded)
 
         self.scroll_content = QWidget()
@@ -1590,7 +2815,8 @@ class StacBrowserDialog(QDialog):
         free_vbox.setSpacing(10)
         for cat in STAC_CATALOGS:
             if not cat.get("auth"):
-                free_vbox.addWidget(self._make_catalog_box(cat, with_creds=False))
+                free_vbox.addWidget(
+                    self._make_catalog_box(cat, with_creds=False))
         free_vbox.addStretch()
         free_scroll.setWidget(free_content)
         QVBoxLayout(self.page_free).addWidget(free_scroll)
@@ -1603,7 +2829,8 @@ class StacBrowserDialog(QDialog):
         auth_vbox.setSpacing(10)
         for cat in STAC_CATALOGS:
             if cat.get("auth"):
-                auth_vbox.addWidget(self._make_catalog_box(cat, with_creds=True))
+                auth_vbox.addWidget(
+                    self._make_catalog_box(cat, with_creds=True))
         auth_vbox.addStretch()
         auth_scroll.setWidget(auth_content)
         auth_page_layout = QVBoxLayout(self.page_auth)
@@ -1641,7 +2868,8 @@ class StacBrowserDialog(QDialog):
         if lic_url:
             lic.setText(
                 f'⚖️ {lic_txt} &nbsp;'
-                f'<a href="{lic_url}" style="color:#3b82f6;">↗ licenza/license</a>'
+                f'<a href="{lic_url}" style="color:#3b82f6;">'
+                f'↗ licenza/license</a>'
             )
         else:
             lic.setText(f"⚖️ {lic_txt}")
@@ -1789,15 +3017,18 @@ class StacBrowserDialog(QDialog):
 
     def _update_ui_lang(self):
         L = self.lang
-        self.setWindowTitle(_t(L, "GeoFusion — STAC Browser", "GeoFusion — STAC Browser"))
+        self.setWindowTitle(
+            _t(L, "GeoFusion — STAC Browser", "GeoFusion — STAC Browser"))
         self.lbl_header.setText(_t(L, "🛰️ STAC Browser", "🛰️ STAC Browser"))
         self.btn_close.setText(_t(L, "Chiudi", "Close"))
 
         # Tab labels
-        self.tabs.setTabText(self.TAB_SEARCH,  _t(L, "🔍 Ricerca", "🔍 Search"))
-        self.tabs.setTabText(self.TAB_RESULTS, _t(L, "📋 Risultati", "📋 Results"))
-        self.tabs.setTabText(self.TAB_ACCOUNT, _t(L, "🗂 Cataloghi", "🗂 Catalogs"))
-        self.tabs.setTabText(self.TAB_INFO,    "ℹ Info")
+        self.tabs.setTabText(self.TAB_SEARCH, _t(L, "🔍 Ricerca", "🔍 Search"))
+        self.tabs.setTabText(
+            self.TAB_RESULTS, _t(L, "📋 Risultati", "📋 Results"))
+        self.tabs.setTabText(
+            self.TAB_ACCOUNT, _t(L, "🗂 Cataloghi", "🗂 Catalogs"))
+        self.tabs.setTabText(self.TAB_INFO, "ℹ Info")
 
         # Catalogs sub-tabs
         self.cat_subtabs.setTabText(
@@ -1851,7 +3082,8 @@ class StacBrowserDialog(QDialog):
             grp_f.setTitle(_t(L, "Filtri", "Filters"))
         self.lbl_date_from.setText(_t(L, "Da:", "From:"))
         self.lbl_date_to.setText(_t(L, "A:", "To:"))
-        self.chk_dates.setText(_t(L, "Abilita filtro date", "Enable date filter"))
+        self.chk_dates.setText(
+            _t(L, "Abilita filtro date", "Enable date filter"))
         self.lbl_cloud.setText(_t(L, "Max nuvole %:", "Max cloud %:"))
         self.chk_cloud.setText(_t(L, "Applica", "Apply"))
         self.lbl_limit.setText(_t(L, "Limite:", "Limit:"))
@@ -1901,6 +3133,20 @@ class StacBrowserDialog(QDialog):
         # Status
         self.lbl_status.setText(_t(L, "Pronto.", "Ready."))
 
+        # Re-render result cards so button labels and section headers
+        # reflect the new language.
+        if self._results:
+            self._clear_result_cards()
+            for cat in STAC_CATALOGS:
+                cid = cat["id"]
+                if cid in self._results:
+                    self._add_catalog_section(
+                        cat,
+                        self._results[cid],
+                        self._errors.get(cid, ""),
+                    )
+            self._update_summary()
+
     def _refresh_bbox_label(self):
         L = self.lang
         if self._bbox:
@@ -1909,7 +3155,8 @@ class StacBrowserDialog(QDialog):
                 f"Area: W={w:.4f}° E={e:.4f}° S={s:.4f}° N={n:.4f}°"
             )
         else:
-            self.lbl_bbox.setText(_t(L, "Nessuna area selezionata", "No area selected"))
+            self.lbl_bbox.setText(
+                _t(L, "Nessuna area selezionata", "No area selected"))
 
     # ──────────────────────────────────────────────────────────────
     # Bbox update (called from plugin)
@@ -1951,8 +3198,8 @@ class StacBrowserDialog(QDialog):
             canvas = _iface.mapCanvas()
             canvas.setExtent(rect)
             canvas.refresh()
-        except Exception:
-            pass
+        except Exception as exc:
+            _log("Failed to zoom canvas to item extent: %s" % exc)
 
     # ──────────────────────────────────────────────────────────────
     # Geocoding (Nominatim)
@@ -1998,10 +3245,12 @@ class StacBrowserDialog(QDialog):
                 self, "STAC Browser",
                 _t(L,
                    "Confine esatto non disponibile per quest'area. "
-                   "Verrà effettuato il ritaglio vicino all'area più prossima indicata "
+                   "Verrà effettuato il ritaglio vicino "
+                   "all'area più prossima indicata "
                    "(utilizzando il rettangolo).",
                    "Exact boundary not available for this area. "
-                   "Clipping will be performed near the closest indicated area "
+                   "Clipping will be performed near the "
+                   "closest indicated area "
                    "(using the bounding box).")
             )
 
@@ -2064,7 +3313,8 @@ class StacBrowserDialog(QDialog):
                 self,
                 "STAC Browser",
                 _t(self.lang,
-                   "Prima disegna un'area sulla mappa (pulsante 'Disegna area').",
+                   "Prima disegna un'area sulla mappa "
+                   "(pulsante 'Disegna area').",
                    "First draw an area on the map (click 'Draw area')."),
             )
             return
@@ -2099,7 +3349,8 @@ class StacBrowserDialog(QDialog):
             d_to = self.date_to.date().toString("yyyy-MM-dd")
             datetime_range = f"{d_from}T00:00:00Z/{d_to}T23:59:59Z"
 
-        cloud_max = self.sb_cloud.value() if self.chk_cloud.isChecked() else None
+        cloud_max = (self.sb_cloud.value()
+                     if self.chk_cloud.isChecked() else None)
         limit = self.sb_limit.value()
 
         # The single-catalog collection filter is meaningless when querying
@@ -2135,8 +3386,10 @@ class StacBrowserDialog(QDialog):
         self.progress_search.setVisible(True)
         self.btn_search.setEnabled(False)
         L = self.lang
-        self.lbl_search_status.setText(_t(L, "Ricerca in corso...", "Searching..."))
-        self.lbl_status.setText(_t(L, "Ricerca STAC avviata.", "STAC search started."))
+        self.lbl_search_status.setText(
+            _t(L, "Ricerca in corso...", "Searching..."))
+        self.lbl_status.setText(
+            _t(L, "Ricerca STAC avviata.", "STAC search started."))
 
     def _on_catalog_started(self, cat_id, cat_name):
         L = self.lang
@@ -2162,7 +3415,8 @@ class StacBrowserDialog(QDialog):
                f"Completato. {total} dataset in {n_cats} cataloghi.",
                f"Done. {total} datasets in {n_cats} catalogs.")
         )
-        self.lbl_status.setText(_t(L, "Ricerca completata.", "Search complete."))
+        self.lbl_status.setText(
+            _t(L, "Ricerca completata.", "Search complete."))
         if total > 0:
             self.tabs.setCurrentIndex(self.TAB_RESULTS)
 
@@ -2187,6 +3441,156 @@ class StacBrowserDialog(QDialog):
                f"Trovati {total} dataset in {n_cats} cataloghi",
                f"Found {total} datasets in {n_cats} catalogs")
         )
+
+    def _show_item_details(self, item):
+        dlg = _ItemDetailsDialog(item, lang=self.lang, parent=self)
+        dlg.exec()
+
+    def _show_spectral_compare(self, item):
+        cat = next(
+            (c for c in STAC_CATALOGS
+             if c.get("url") == item.get("catalog_url")),
+            {},
+        )
+        dlg = _SpectralCompareDialog(
+            item, lang=self.lang, auth=self._cred_for(cat), parent=self
+        )
+        dlg.exec()
+
+    def _rerender_results(self):
+        self._clear_result_cards()
+        for cat in STAC_CATALOGS:
+            cid = cat["id"]
+            if cid in self._results:
+                self._add_catalog_section(
+                    cat,
+                    self._results[cid],
+                    self._errors.get(cid, ""),
+                )
+        self._update_summary()
+
+    def _result_column_count(self):
+        width = self.width()
+        if hasattr(self, "scroll_area") and self.scroll_area.viewport():
+            width = self.scroll_area.viewport().width()
+        # 240 px card + spacing/margins. Limit to four columns to keep
+        # previews readable on wide screens.
+        return max(1, min(4, int(max(240, width - 20) / 258)))
+
+    def _group_items_by_data_type(self, items):
+        groups = {}
+        for item in items:
+            key = item.get("data_type") or "other"
+            groups.setdefault(key, []).append(item)
+        ordered = []
+        for key in _DATA_TYPE_ORDER:
+            if key in groups:
+                ordered.append((key, groups.pop(key)))
+        for key in sorted(groups):
+            ordered.append((key, groups[key]))
+        for _key, group_items in ordered:
+            group_items.sort(key=lambda i: _item_date(i), reverse=True)
+        return ordered
+
+    def _make_timeline_widget(self, items):
+        wrapper = QFrame()
+        wrapper.setStyleSheet(
+            "QFrame { background:#071c2e; border:1px solid #0a4a6e;"
+            "border-radius:8px; } QLabel { background:transparent; }"
+        )
+        outer = QVBoxLayout(wrapper)
+        outer.setContentsMargins(8, 8, 8, 8)
+        outer.setSpacing(6)
+
+        lbl = QLabel(_t(
+            self.lang, "Timeline acquisizioni", "Acquisition timeline"
+        ))
+        lbl.setStyleSheet("color:#00e5ff; font-size:12px; font-weight:700;")
+        outer.addWidget(lbl)
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(QtCompat.ScrollBarAsNeeded)
+        scroll.setVerticalScrollBarPolicy(QtCompat.ScrollBarAlwaysOff)
+        scroll.setMaximumHeight(76)
+        scroll.setStyleSheet("QScrollArea { border:none; }")
+
+        content = QWidget()
+        row = QHBoxLayout(content)
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(6)
+        for item in sorted(items, key=lambda i: _item_date(i)):
+            dtype = item.get("data_type") or "other"
+            date_txt = _item_date(item) or "n/d"
+            btn = QPushButton(
+                "%s\n%s %s" % (
+                    date_txt,
+                    _data_type_icon(dtype),
+                    _data_type_label(self.lang, dtype),
+                )
+            )
+            btn.setFixedSize(132, 48)
+            btn.setToolTip(_item_title(item, 120))
+            btn.setStyleSheet(
+                "QPushButton { background:#020e1a; border:1px solid #0a4a6e;"
+                "border-radius:8px; padding:4px; color:#7ac8d8;"
+                "font-size:10px; text-align:center; }"
+                "QPushButton:hover { border-color:#00e5ff; color:#d0f0ff; }"
+            )
+            btn.clicked.connect(
+                lambda _checked, i=item: self._show_item_details(i)
+            )
+            row.addWidget(btn)
+        row.addStretch()
+        scroll.setWidget(content)
+        outer.addWidget(scroll)
+        return wrapper
+
+    def _make_data_group_widget(self, cat, type_key, items):
+        group_widget = QWidget()
+        group_layout = QVBoxLayout(group_widget)
+        group_layout.setContentsMargins(0, 0, 0, 0)
+        group_layout.setSpacing(6)
+
+        spectral_count = len([i for i in items if i.get("spectral_indices")])
+        hdr = QLabel(
+            '<span style="color:#00e5ff; font-weight:700;">%s %s</span>'
+            ' <span style="color:#7ac8d8;">· %s</span>'
+            ' <span style="color:#4a8090;">%s</span>' % (
+                _data_type_icon(type_key),
+                _html_escape(_data_type_label(self.lang, type_key)),
+                len(items),
+                _html_escape(_t(
+                    self.lang,
+                    f"{spectral_count} con indici COG",
+                    f"{spectral_count} with COG indices",
+                )),
+            )
+        )
+        hdr.setStyleSheet("font-size:12px; padding:6px 2px 2px 2px;")
+        group_layout.addWidget(hdr)
+
+        grid_widget = QWidget()
+        grid_layout = QGridLayout(grid_widget)
+        grid_layout.setSpacing(8)
+        grid_layout.setContentsMargins(0, 0, 0, 0)
+
+        col_count = self._result_column_count()
+        self._last_result_col_count = col_count
+        cat_auth = self._cred_for(cat)
+        for idx, item in enumerate(items):
+            card = ItemCard(
+                item, lang=self.lang,
+                preview_cache=self._preview_cache,
+                catalog=cat, auth=cat_auth, controller=self,
+                details_callback=self._show_item_details,
+                spectral_callback=self._show_spectral_compare,
+                parent=grid_widget,
+            )
+            grid_layout.addWidget(card, idx // col_count, idx % col_count)
+
+        group_layout.addWidget(grid_widget)
+        return group_widget
 
     def _add_catalog_section(self, cat, items, error):
         """Append a catalog section with cards to the results scroll area."""
@@ -2217,7 +3621,8 @@ class StacBrowserDialog(QDialog):
                 f' &nbsp;<span style="color:#4a8090;">·</span>&nbsp;'
                 f'<span style="color:#7ac8d8;">'
                 f'{n} {_t(self.lang, "risultati", "results")}</span>'
-                f'&nbsp;&nbsp;<a href="{cat_url}" style="color:#3b82f6; font-size:11px;">↗ '
+                f'&nbsp;&nbsp;<a href="{cat_url}" '
+                f'style="color:#3b82f6; font-size:11px;">↗ '
                 f'{_t(self.lang, "apri catalogo", "open catalog")}</a>'
             )
             header_lbl.setOpenExternalLinks(True)
@@ -2227,9 +3632,10 @@ class StacBrowserDialog(QDialog):
         # Auth notice: free registration required + link to official portal.
         if cat.get("auth") and items:
             has_creds = bool(
-                self._cred_for(cat).get("token")
-                or (self._cred_for(cat).get("username")
-                    and self._cred_for(cat).get("password"))
+                self._cred_for(cat).get("token") or (
+                    self._cred_for(cat).get("username")
+                    and self._cred_for(cat).get("password")
+                )
             )
             if not has_creds:
                 reg = cat.get("register_url") or cat_url
@@ -2252,34 +3658,24 @@ class StacBrowserDialog(QDialog):
             )
             err_lbl.setWordWrap(True)
             err_lbl.setStyleSheet(
-                "background:rgba(239,68,68,0.08); border:1px solid rgba(239,68,68,0.2);"
+                "background:rgba(239,68,68,0.08);"
+                "border:1px solid rgba(239,68,68,0.2);"
                 "border-radius:6px; padding:8px; font-size:11px;"
             )
             section_layout.addWidget(err_lbl)
         elif items:
-            # Grid of cards (3 columns adaptive)
-            grid_widget = QWidget()
-            grid_layout = QGridLayout(grid_widget)
-            grid_layout.setSpacing(8)
-            grid_layout.setContentsMargins(0, 0, 0, 0)
-
-            col_count = 3
-            cat_auth = self._cred_for(cat)
-            for idx, item in enumerate(items):
-                card = ItemCard(
-                    item, lang=self.lang,
-                    preview_cache=self._preview_cache,
-                    catalog=cat, auth=cat_auth, controller=self,
-                    parent=grid_widget,
+            section_layout.addWidget(self._make_timeline_widget(items))
+            for type_key, group_items in self._group_items_by_data_type(items):
+                section_layout.addWidget(
+                    self._make_data_group_widget(cat, type_key, group_items)
                 )
-                grid_layout.addWidget(card, idx // col_count, idx % col_count)
-
-            section_layout.addWidget(grid_widget)
         else:
             lbl_empty = QLabel(
-                _t(self.lang, "Nessun risultato in questo catalogo.", "No results in this catalog.")
+                _t(self.lang, "Nessun risultato in questo catalogo.",
+                   "No results in this catalog.")
             )
-            lbl_empty.setStyleSheet("color:#4a8090; font-size:11px; padding:4px;")
+            lbl_empty.setStyleSheet(
+                "color:#4a8090; font-size:11px; padding:4px;")
             section_layout.addWidget(lbl_empty)
 
         # Separator line
@@ -2304,4 +3700,5 @@ class StacBrowserDialog(QDialog):
         self._refresh_bbox_label()
         L = self.lang
         self.lbl_search_status.setText("")
-        self.lbl_status.setText(_t(L, "Risultati cancellati.", "Results cleared."))
+        self.lbl_status.setText(
+            _t(L, "Risultati cancellati.", "Results cleared."))

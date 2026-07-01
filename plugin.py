@@ -98,7 +98,8 @@ class StacBrowserPlugin:
 
     _DRAW_HINTS = {
         "bbox": (
-            "Clicca e trascina per disegnare un rettangolo. Esc per annullare. / "
+            "Clicca e trascina per disegnare un rettangolo. "
+            "Esc per annullare. / "
             "Click and drag to draw a rectangle. Esc to cancel."
         ),
         "point": (
@@ -106,8 +107,9 @@ class StacBrowserPlugin:
             "Click a point on the map. Esc to cancel."
         ),
         "line": (
-            "Clicca per aggiungere vertici, tasto destro o doppio click per "
-            "chiudere. Esc per annullare. / Click to add vertices, right-click "
+            "Clicca per aggiungere vertici, tasto destro o doppio "
+            "click per chiudere. Esc per annullare. / "
+            "Click to add vertices, right-click "
             "or double-click to finish. Esc to cancel."
         ),
     }

@@ -57,12 +57,15 @@ STAC_CATALOGS = [
         "name": "Microsoft Planetary Computer",
         "url": "https://planetarycomputer.microsoft.com/api/stac/v1",
         "site_url": "https://planetarycomputer.microsoft.com/",
-        "description": "Sentinel-2, Landsat, MODIS, NAIP, DEM, permafrost e molto altro",
-        "license": "Dati dipendono dalla collezione. Molti sono CC BY 4.0 o Public Domain.",
+        "description": ("Sentinel-2, Landsat, MODIS, NAIP, DEM, "
+                        "permafrost e molto altro"),
+        "license": ("Dati dipendono dalla collezione. Molti sono "
+                    "CC BY 4.0 o Public Domain."),
         "license_url": "https://planetarycomputer.microsoft.com/terms",
         "auth": False,
         "search_method": "POST",
-        "note": "Il download degli asset richiede token SAS gratuito per alcuni dataset.",
+        "note": ("Il download degli asset richiede token SAS gratuito "
+                 "per alcuni dataset."),
     },
     {
         "id": "usgs-landsat",
@@ -71,7 +74,10 @@ STAC_CATALOGS = [
         "site_url": "https://www.usgs.gov/landsat-missions",
         "description": "Landsat Collection 2 (Landsat 5, 7, 8, 9)",
         "license": "Public Domain — USGS/NASA.",
-        "license_url": "https://www.usgs.gov/information-policies-and-instructions/crediting-usgs",
+        "license_url": (
+            "https://www.usgs.gov/information-policies-and-instructions/"
+            "crediting-usgs"
+        ),
         "auth": True,
         "register_url": "https://ers.cr.usgs.gov/register",
         "auth_note": "Il download richiede un account gratuito USGS EROS.",
@@ -82,13 +88,16 @@ STAC_CATALOGS = [
         "name": "NASA EarthData CMR",
         "url": "https://cmr.earthdata.nasa.gov/stac",
         "site_url": "https://www.earthdata.nasa.gov/",
-        "description": "Archivio NASA: MODIS, VIIRS, ASTER, OCO-2, e centinaia di altri dataset",
+        "description": ("Archivio NASA: MODIS, VIIRS, ASTER, OCO-2, "
+                        "e centinaia di altri dataset"),
         "license": (
             "Dati NASA: Public Domain. Alcuni dataset richiedono "
             "registrazione EarthData gratuita per il download."
         ),
-        "license_url": ("https://www.earthdata.nasa.gov/engage/"
-                        "open-data-services-and-software/data-information-policy"),
+        "license_url": (
+            "https://www.earthdata.nasa.gov/engage/"
+            "open-data-services-and-software/data-information-policy"
+        ),
         "auth": True,
         "register_url": "https://urs.earthdata.nasa.gov/users/new",
         "auth_note": "Il download richiede un account gratuito NASA EarthData "
@@ -160,6 +169,205 @@ _RASTER_ROLES = {"data", "overview", "visual", "analytic"}
 
 _RASTER_EXTENSIONS = {".tif", ".tiff", ".jp2", ".nc", ".hdf", ".hdf5", ".h5"}
 
+_SPECTRAL_DEFINITIONS = {
+    "ndvi": {
+        "label_it": "NDVI",
+        "label_en": "NDVI",
+        "requires": ("nir", "red"),
+        "formula": "(NIR - Red) / (NIR + Red)",
+    },
+    "ndwi": {
+        "label_it": "NDWI",
+        "label_en": "NDWI",
+        "requires": ("green", "nir"),
+        "formula": "(Green - NIR) / (Green + NIR)",
+    },
+    "false_color": {
+        "label_it": "Falso colore",
+        "label_en": "False color",
+        "requires": ("nir", "red", "green"),
+        "formula": "RGB = NIR / Red / Green",
+    },
+}
+
+_BAND_ALIASES = {
+    "blue": {
+        "blue", "coastal_blue", "b02", "b2", "band2", "band_2", "sr_b2",
+        "blue.tif",
+    },
+    "green": {
+        "green", "b03", "b3", "band3", "band_3", "sr_b3", "green.tif",
+    },
+    "red": {
+        "red", "b04", "b4", "band4", "band_4", "sr_b4", "red.tif",
+    },
+    "nir": {
+        "nir", "nir08", "nir09", "b08", "b8", "b8a", "b05", "b5",
+        "band5", "band_5", "sr_b5", "nir.tif",
+    },
+    "swir16": {
+        "swir", "swir16", "swir1", "b11", "b6", "b06", "band6",
+        "band_6", "sr_b6",
+    },
+    "swir22": {
+        "swir22", "swir2", "b12", "b7", "b07", "band7", "band_7",
+        "sr_b7",
+    },
+}
+
+_LANDSAT_45_TM = {"landsat-4", "landsat-5", "landsat-7", "landsat4",
+                  "landsat5", "landsat7"}
+
+
+def _text_tokens(*values):
+    """Return normalized text tokens used for light-weight STAC heuristics."""
+    tokens = set()
+    for value in values:
+        text = str(value or "").lower()
+        for sep in ("/", "\\", ".", "-", "_", ":", " "):
+            text = text.replace(sep, " ")
+        tokens.update(t for t in text.split() if t)
+    return tokens
+
+
+def _spectral_roles_from_band_dict(band):
+    """Extract normalized spectral roles from an eo/raster band object."""
+    roles = set()
+    if not isinstance(band, dict):
+        return roles
+    common = (band.get("common_name") or band.get("name") or "").lower()
+    center = band.get("center_wavelength")
+    if common in _BAND_ALIASES:
+        roles.add(common)
+    for role, aliases in _BAND_ALIASES.items():
+        if common in aliases:
+            roles.add(role)
+    try:
+        wl = float(center)
+    except (TypeError, ValueError):
+        wl = None
+    if wl is not None:
+        if 0.45 <= wl <= 0.52:
+            roles.add("blue")
+        elif 0.52 < wl <= 0.60:
+            roles.add("green")
+        elif 0.62 <= wl <= 0.70:
+            roles.add("red")
+        elif 0.75 <= wl <= 0.95:
+            roles.add("nir")
+        elif 1.55 <= wl <= 1.75:
+            roles.add("swir16")
+        elif 2.05 <= wl <= 2.35:
+            roles.add("swir22")
+    return roles
+
+
+def _spectral_roles_from_asset(key, asset, platform=""):
+    """Infer spectral roles for a STAC asset from metadata and common keys."""
+    roles = set()
+    for band in asset.get("eo:bands") or []:
+        roles.update(_spectral_roles_from_band_dict(band))
+    for band in asset.get("raster:bands") or []:
+        roles.update(_spectral_roles_from_band_dict(band))
+
+    title = asset.get("title") or ""
+    href_tail = (asset.get("href") or "").split("?")[0].rsplit("/", 1)[-1]
+    tokens = _text_tokens(key, title, href_tail)
+    for role, aliases in _BAND_ALIASES.items():
+        if tokens & aliases:
+            roles.add(role)
+
+    # Landsat 4/5/7 use B4 as NIR and B3 as red. Prefer explicit
+    # common_name metadata, but fix the common ambiguous asset-key case.
+    platform_key = (platform or "").lower().replace("_", "-")
+    if any(name in platform_key for name in _LANDSAT_45_TM):
+        if "b4" in tokens or "b04" in tokens or "sr b4" in " ".join(tokens):
+            roles.discard("red")
+            roles.add("nir")
+        if "b3" in tokens or "b03" in tokens or "sr b3" in " ".join(tokens):
+            roles.discard("green")
+            roles.add("red")
+        if "b2" in tokens or "b02" in tokens or "sr b2" in " ".join(tokens):
+            roles.discard("blue")
+            roles.add("green")
+
+    return sorted(roles)
+
+
+def _spectral_asset_map(assets):
+    """Return first raster asset found for each normalized spectral role."""
+    mapping = {}
+    for asset in assets:
+        if not asset.get("is_raster"):
+            continue
+        for role in asset.get("band_roles") or []:
+            mapping.setdefault(role, asset)
+    return mapping
+
+
+def spectral_index_options(assets):
+    """Return available spectral index/composite options for parsed assets."""
+    mapping = _spectral_asset_map(assets)
+    options = []
+    for key, definition in _SPECTRAL_DEFINITIONS.items():
+        required = definition["requires"]
+        missing = [role for role in required if role not in mapping]
+        if missing:
+            continue
+        option = dict(definition)
+        option["key"] = key
+        option["asset_keys"] = {
+            role: mapping[role].get("key") or mapping[role].get("title") or ""
+            for role in required
+        }
+        options.append(option)
+    return options
+
+
+def classify_data_type(feature, parsed_assets, bands_count):
+    """Classify a parsed item for result grouping in the UI."""
+    props = feature.get("properties") or {}
+    context = " ".join(
+        str(v or "") for v in (
+            feature.get("id"),
+            feature.get("collection"),
+            props.get("collection"),
+            props.get("platform"),
+            props.get("constellation"),
+            props.get("instruments"),
+        )
+    ).lower()
+    asset_context = " ".join(
+        "%s %s" % (a.get("key", ""), a.get("title", ""))
+        for a in parsed_assets
+    ).lower()
+    context = context + " " + asset_context
+    roles = set()
+    for asset in parsed_assets:
+        roles.update(asset.get("band_roles") or [])
+
+    if any(k in context for k in ("naip", "ortho", "orthophoto",
+                                  "aerial", "aerofoto")):
+        return "orthophoto"
+    if any(k in context for k in ("dem", "elevation", "terrain",
+                                  "copernicus dem", "srtm")):
+        return "dem"
+    if any(k in context for k in ("sentinel-1", "sar", "radar", "grd")):
+        return "radar"
+    if bands_count == 1:
+        return "bands_1"
+    if bands_count == 2:
+        return "bands_2"
+    if bands_count == 3:
+        return "bands_3"
+    if bands_count and bands_count > 3:
+        return "multispectral"
+    if {"red", "green", "blue"} <= roles:
+        return "bands_3"
+    if {"red", "nir"} <= roles or len(roles) > 3:
+        return "multispectral"
+    return "other"
+
 
 def _is_raster_asset(asset):
     """Return True if an asset dict looks like a raster data asset."""
@@ -185,21 +393,32 @@ _HEADERS = {
     "User-Agent": "QGIS-STAC-Browser/1.0 (+https://sinocloud.it)",
     "Accept": "application/json",
 }
+_ALLOWED_SCHEMES = ("http", "https")
+
+
+def _check_url_scheme(url):
+    """Reject non-HTTP(S) URLs to avoid file:// or custom schemes."""
+    scheme = urllib.parse.urlparse(url).scheme.lower()
+    if scheme not in _ALLOWED_SCHEMES:
+        raise ValueError("URL scheme non consentito: %r" % scheme)
 
 
 def _http_get(url, timeout=_TIMEOUT):
+    _check_url_scheme(url)  # rejects file:// and custom schemes
     req = urllib.request.Request(url, headers=_HEADERS)
-    with urllib.request.urlopen(req, timeout=timeout) as resp:
+    with urllib.request.urlopen(req, timeout=timeout) as resp:  # nosec B310
         return json.loads(resp.read().decode("utf-8"))
 
 
 def _http_post(url, body, timeout=_TIMEOUT):
+    _check_url_scheme(url)  # rejects file:// and custom schemes
     data = json.dumps(body).encode("utf-8")
     req = urllib.request.Request(
-        url, data=data, headers={**_HEADERS, "Content-Type": "application/json"},
+        url, data=data,
+        headers={**_HEADERS, "Content-Type": "application/json"},
         method="POST",
     )
-    with urllib.request.urlopen(req, timeout=timeout) as resp:
+    with urllib.request.urlopen(req, timeout=timeout) as resp:  # nosec B310
         return json.loads(resp.read().decode("utf-8"))
 
 
@@ -223,7 +442,8 @@ def stac_search(
     ----------
     catalog_url : str
     bbox : list  [west, south, east, north]
-    datetime_range : str | None   e.g. "2023-01-01T00:00:00Z/2023-12-31T23:59:59Z"
+    datetime_range : str | None
+        e.g. "2023-01-01T00:00:00Z/2023-12-31T23:59:59Z"
     collections : list | None
     cloud_max : float | None      0–100
     limit : int
@@ -257,7 +477,10 @@ def stac_search(
                 else:
                     raise
         else:
-            result = _search_get(search_url, bbox, datetime_range, collections, cloud_max, limit)
+            result = _search_get(
+                search_url, bbox, datetime_range, collections,
+                cloud_max, limit,
+            )
 
         items = result.get("features") or result.get("items") or []
         return {"items": items, "error": None}
@@ -266,7 +489,8 @@ def stac_search(
         return {"items": [], "error": str(exc)}
 
 
-def _search_get(search_url, bbox, datetime_range, collections, cloud_max, limit):
+def _search_get(search_url, bbox, datetime_range, collections,
+                cloud_max, limit):
     params = {
         "bbox": ",".join(str(v) for v in bbox),
         "limit": str(limit),
@@ -446,6 +670,9 @@ def parse_stac_item(feature, catalog_url="", catalog_name=""):
     # bands
     eo_bands = props.get("eo:bands") or []
     bands_count = len(eo_bands) if eo_bands else None
+    item_band_roles = set()
+    for band in eo_bands:
+        item_band_roles.update(_spectral_roles_from_band_dict(band))
 
     # preview / thumbnail
     preview = None
@@ -477,22 +704,35 @@ def parse_stac_item(feature, catalog_url="", catalog_name=""):
             except (ValueError, TypeError):
                 pass
 
+        band_roles = _spectral_roles_from_asset(
+            key, asset, props.get("platform") or props.get("constellation")
+        )
+        item_band_roles.update(band_roles)
+
         parsed_assets.append({
             "key": key,
             "title": title,
             "href": href,
             "type": atype,
             "roles": roles,
+            "band_roles": band_roles,
             "size_mb": size_mb,
-            "is_raster": _is_raster_asset({"href": href, "type": atype, "roles": roles}),
+            "is_raster": _is_raster_asset(
+                {"href": href, "type": atype, "roles": roles}
+            ),
         })
 
     # Sort: raster data assets first
     parsed_assets.sort(key=lambda a: (0 if a["is_raster"] else 1, a["key"]))
 
+    data_type = classify_data_type(feature, parsed_assets, bands_count)
+    spectral_options = spectral_index_options(parsed_assets)
+
     return {
         "id": feature.get("id") or "",
-        "collection": props.get("collection") or feature.get("collection") or "",
+        "collection": (
+            props.get("collection") or feature.get("collection") or ""
+        ),
         "catalog_url": catalog_url,
         "catalog_name": catalog_name,
         "bbox": feature.get("bbox"),
@@ -504,7 +744,13 @@ def parse_stac_item(feature, catalog_url="", catalog_name=""):
         "gsd": props.get("gsd"),
         "proj_shape": proj_shape,
         "bands_count": bands_count,
-        "processing_level": props.get("processing:level") or props.get("processing_level") or "",
+        "band_roles": sorted(item_band_roles),
+        "data_type": data_type,
+        "spectral_indices": spectral_options,
+        "processing_level": (
+            props.get("processing:level") or props.get("processing_level")
+            or ""
+        ),
         "preview": preview,
         "assets": parsed_assets,
     }
@@ -616,7 +862,8 @@ def download_asset(href, output_path, progress_callback=None, auth=None):
     Download an asset to ``output_path``.
 
     The href is signed automatically when needed (Planetary Computer). Optional
-    ``auth`` is a dict ``{"token": ..., "username": ..., "password": ...}`` used
+    ``auth`` is a dict ``{"token": ..., "username": ..., "password":
+    ...}`` used
     only for catalogs that require a free registration: a token is sent as
     ``Authorization: Bearer``, username/password enable HTTP Basic/Digest auth.
 
@@ -627,6 +874,7 @@ def download_asset(href, output_path, progress_callback=None, auth=None):
     bytes_total may be 0 if Content-Length is unavailable.
     """
     href = sign_href_if_needed(href)
+    _check_url_scheme(href)  # rejects file:// and custom schemes
     auth = auth or {}
     headers = dict(_HEADERS)
     token = (auth.get("token") or "").strip()
@@ -652,7 +900,7 @@ def download_asset(href, output_path, progress_callback=None, auth=None):
     open_fn = opener.open if opener else urllib.request.urlopen
     chunk_size = 64 * 1024  # 64 KB
 
-    with open_fn(req, timeout=120) as resp:
+    with open_fn(req, timeout=120) as resp:  # nosec B310
         content_type = resp.headers.get("Content-Type", "")
         total = int(resp.headers.get("Content-Length") or 0)
         done = 0

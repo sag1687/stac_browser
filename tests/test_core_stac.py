@@ -50,7 +50,9 @@ class TestParseItem(unittest.TestCase):
                 "eo:cloud_cover": 12.3,
                 "platform": "sentinel-2a",
                 "gsd": 10,
-                "eo:bands": [{"name": "B04"}, {"name": "B03"}, {"name": "B02"}],
+                "eo:bands": [
+                    {"name": "B04"}, {"name": "B03"}, {"name": "B02"},
+                ],
                 "proj:epsg": 32633,
             },
             "assets": {
@@ -79,6 +81,8 @@ class TestParseItem(unittest.TestCase):
         self.assertEqual(parsed["catalog_name"], "Test Catalog")
         self.assertEqual(parsed["cloud_cover"], 12.3)
         self.assertEqual(parsed["bands_count"], 3)
+        self.assertEqual(parsed["data_type"], "bands_3")
+        self.assertEqual(parsed["band_roles"], ["blue", "green", "red"])
         self.assertEqual(parsed["preview"], "http://x/thumb.png")
 
     def test_asset_size_and_sort(self):
@@ -92,6 +96,49 @@ class TestParseItem(unittest.TestCase):
         parsed = core_stac.parse_stac_item(self.feature)
         best = core_stac.best_raster_asset(parsed)
         self.assertEqual(best["key"], "B04")  # role "data" wins over "visual"
+
+    def test_spectral_options_from_cog_band_assets(self):
+        feature = {
+            "id": "S2_INDEX",
+            "collection": "sentinel-2-l2a",
+            "properties": {
+                "datetime": "2024-07-01T10:00:00Z",
+                "platform": "sentinel-2a",
+                "eo:bands": [
+                    {"name": "B02"}, {"name": "B03"},
+                    {"name": "B04"}, {"name": "B08"},
+                ],
+            },
+            "assets": {
+                "B02": {"href": "http://x/B02.tif", "roles": ["data"]},
+                "B03": {"href": "http://x/B03.tif", "roles": ["data"]},
+                "B04": {"href": "http://x/B04.tif", "roles": ["data"]},
+                "B08": {"href": "http://x/B08.tif", "roles": ["data"]},
+            },
+        }
+        parsed = core_stac.parse_stac_item(feature)
+        option_keys = {opt["key"] for opt in parsed["spectral_indices"]}
+        self.assertEqual(parsed["data_type"], "multispectral")
+        self.assertEqual(
+            option_keys, {"ndvi", "ndwi", "false_color"}
+        )
+
+    def test_classifies_orthophoto_before_band_count(self):
+        feature = {
+            "id": "NAIP_TILE",
+            "collection": "naip",
+            "properties": {
+                "eo:bands": [
+                    {"name": "R"}, {"name": "G"},
+                    {"name": "B"}, {"name": "N"},
+                ],
+            },
+            "assets": {
+                "image": {"href": "http://x/ortho.tif", "roles": ["data"]},
+            },
+        }
+        parsed = core_stac.parse_stac_item(feature)
+        self.assertEqual(parsed["data_type"], "orthophoto")
 
 
 class TestGeocode(unittest.TestCase):

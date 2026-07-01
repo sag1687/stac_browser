@@ -19,7 +19,7 @@
 ### Cos'è
 **STAC Browser** è un plugin per QGIS che semplifica la ricerca, l'anteprima e il download di dati di osservazione della Terra (satellitari, DEM, dati pedologici e climatici) sfruttando lo standard aperto **SpatioTemporal Asset Catalog (STAC)**.
 
-Invece di aprire decine di portali diversi, definisci una zona d'interesse **una sola volta** e il plugin cerca **in parallelo** in tutti i principali cataloghi mondiali, restituendoti un'unica griglia di risultati con anteprime, metadati e azioni rapide.
+Invece di aprire decine di portali diversi, definisci una zona d'interesse **una sola volta** e il plugin cerca **in parallelo** in tutti i principali cataloghi mondiali, restituendoti risultati organizzati per **tipo dato**, una **timeline** delle acquisizioni, anteprime, metadati e azioni rapide.
 
 ### A cosa serve
 - 🌍 **Trovare dati gratuiti** per qualsiasi area del pianeta senza conoscere in anticipo quali archivi la coprono.
@@ -36,6 +36,11 @@ Invece di aprire decine di portali diversi, definisci una zona d'interesse **una
 | ╱ | **Disegno linea** | Traccia una polilinea (es. un percorso): si cerca lungo il suo inviluppo. |
 | 📍 | **Geocoding indirizzo** | Digita un indirizzo o un toponimo: **Nominatim** (OpenStreetMap) lo converte in coordinate e la mappa si centra automaticamente. |
 | 🖼️ | **Anteprime e metadati** | Thumbnail, data, copertura nuvolosa, piattaforma, GSD, banda, livello di processamento. |
+| 🧭 | **Timeline risultati** | Ogni catalogo mostra una timeline cliccabile delle acquisizioni, collegata ai dettagli del dataset. |
+| 🗂️ | **Gruppi per tipo dato** | I risultati sono divisi in ortofoto, 1/2/3 bande, multispettrale, DEM, radar e altri dati. |
+| ↔️ | **Griglia adattiva** | Le schede dei risultati si ridispongono in 1-4 colonne in base alla larghezza della finestra. |
+| 🎚️ | **Scelta bande COG** | Prima del download puoi scegliere tutte le bande disponibili o solo alcune; il salvataggio locale mostra logo, percentuale e tempo. |
+| 🧪 | **Indici COG opt-in** | Quando le bande sono disponibili, abilita un flag esplicito e salva **NDVI**, **NDWI** o **Falso Colore** come GeoTIFF locale, con tempo di download/elaborazione visibile. |
 | ⬇️ | **Download / Add to QGIS** | Scarica l'asset su disco **oppure** aggiungilo come layer raster remoto. |
 | ✂️ | **Ritaglio automatico** | Ritaglia al confine comunale (OSM/Nominatim) o alla geometria attiva, oppure scarica il dataset completo. |
 | 🔐 | **Cataloghi liberi / con login** | Tab Cataloghi in due sotto-schede, con licenza, sito ufficiale e campi utente/password/token/API. |
@@ -68,7 +73,10 @@ Invece di aprire decine di portali diversi, definisci una zona d'interesse **una
    - clicca **▭ Rettangolo**, **• Punto** o **╱ Linea** e disegna sulla mappa.
 3. Con **🔄 Ricerca automatica** attiva (default) i risultati compaiono da soli.
    In alternativa, disattivala per scegliere cataloghi/collezioni/date/nuvolosità e premere **🔍 Cerca**.
-4. Nei risultati: **➕ QGIS** per caricare il layer, **💾 Scarica** per salvarlo.
+4. Nei risultati usa la **timeline** o le schede per aprire i dettagli; **🧪 Indici** abilita NDVI/NDWI/Falso Colore solo se lo STAC espone le bande necessarie.
+5. Per le bande COG, scegli **tutte** o solo quelle necessarie e salvale localmente prima del caricamento in QGIS.
+6. Per gli indici, attiva il flag di conferma e salva il GeoTIFF locale prima del caricamento in QGIS.
+7. Usa **➕ QGIS** per caricare il layer, **💾 Scarica** per salvarlo.
 
 ### ⚠️ Attribuzione richiesta
 - **Sentinel:** *"Contains modified Copernicus Sentinel data [anno] / ESA"*
@@ -83,7 +91,7 @@ Invece di aprire decine di portali diversi, definisci una zona d'interesse **una
 ### What it is
 **STAC Browser** is a QGIS plugin that streamlines the discovery, preview and download of Earth-observation data (satellite imagery, DEMs, soil and climate data) through the open **SpatioTemporal Asset Catalog (STAC)** standard.
 
-Instead of opening a dozen different portals, you define your area of interest **once** and the plugin searches **in parallel** across the world's main catalogs, returning a single results grid with previews, metadata and quick actions.
+Instead of opening a dozen different portals, you define your area of interest **once** and the plugin searches **in parallel** across the world's main catalogs, returning results grouped by **data type**, an acquisition **timeline**, previews, metadata and quick actions.
 
 ### What it is for
 - 🌍 **Find free data** for any area on Earth without knowing in advance which archives cover it.
@@ -100,6 +108,11 @@ Instead of opening a dozen different portals, you define your area of interest *
 | ╱ | **Line drawing** | Trace a polyline (e.g. a route): the search uses its envelope. |
 | 📍 | **Address geocoding** | Type an address or place name: **Nominatim** (OpenStreetMap) converts it to coordinates and the map auto-centers. |
 | 🖼️ | **Previews & metadata** | Thumbnail, date, cloud cover, platform, GSD, bands, processing level. |
+| 🧭 | **Results timeline** | Each catalog shows a clickable acquisition timeline linked to dataset details. |
+| 🗂️ | **Data-type groups** | Results are split into orthophoto, 1/2/3 bands, multispectral, DEM, radar and other data. |
+| ↔️ | **Adaptive grid** | Result cards reflow into 1-4 columns according to the available window width. |
+| 🎚️ | **COG band selection** | Before download you can choose all available bands or only some; local save shows logo, percentage and time. |
+| 🧪 | **Opt-in COG indices** | When the required bands exist, enable an explicit flag and save **NDVI**, **NDWI** or **False Color** as a local GeoTIFF with visible download/processing time. |
 | ⬇️ | **Download / Add to QGIS** | Download the asset to disk **or** add it as a remote raster layer. |
 | ✂️ | **Automatic clip** | Clip to a municipal boundary (OSM/Nominatim) or the active geometry, or download the full dataset. |
 | 🔐 | **Open / login catalogs** | Catalogs tab with two sub-tabs, showing license, official site and username/password/token/API fields. |
@@ -132,7 +145,10 @@ Instead of opening a dozen different portals, you define your area of interest *
    - click **▭ Rectangle**, **• Point** or **╱ Line** and draw on the map.
 3. With **🔄 Automatic search** on (default) results appear by themselves.
    Otherwise, turn it off to pick catalogs/collections/dates/cloud cover and press **🔍 Search**.
-4. In the results: **➕ QGIS** to load the layer, **💾 Download** to save it.
+4. In the results, use the **timeline** or cards to open details; **🧪 Indices** enables NDVI/NDWI/False Color only when the STAC item exposes the required bands.
+5. For COG bands, choose **all** or only the needed bands and save them locally before loading into QGIS.
+6. For indices, enable the confirmation flag and save the local GeoTIFF before loading it into QGIS.
+7. Use **➕ QGIS** to load the layer, **💾 Download** to save it.
 
 ### ⚠️ Required attribution
 - **Sentinel:** *"Contains modified Copernicus Sentinel data [year] / ESA"*
@@ -214,7 +230,7 @@ Il codice è verificato con **flake8** (0 warning) e coperto da test unitari per
 Sviluppato da / Developed by **Dott. Sarino Alfonso Grande**.
 - ✉️ **Email:** sino.grande@gmail.com
 - 🌐 **GeoFusion WebGIS:** [sinocloud.it](https://sinocloud.it)
-- 🐙 **GitHub:** [sinogrande](https://github.com/sinogrande)
+- 🐙 **GitHub:** [sinogrande](https://github.com/sag1687)
 
 ### Altri plugin dell'autore / Other plugins by the author
 **Profili, Sezioni e Comuni** · **Q-Press** · **QGIS Ledger** · **Geobridge** · **CRS Fixer** · **GeoCSV Mapper** · **GeoFusion WebGIS**

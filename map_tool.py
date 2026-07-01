@@ -113,8 +113,11 @@ class DrawBboxTool(QgsMapTool):
             self._update_rubber_band(self._start_point, current)
 
     def canvasReleaseEvent(self, e):
-        if (e.button() == QtCompat.LeftButton and self._drawing
-                and self._start_point is not None):
+        if (
+            e.button() == QtCompat.LeftButton
+            and self._drawing
+            and self._start_point is not None
+        ):
             end_point = self.toMapCoordinates(e.pos())
             self._drawing = False
             self._rb.reset(QgsWkbTypes.PolygonGeometry)
