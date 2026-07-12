@@ -748,8 +748,8 @@ def parse_stac_item(feature, catalog_url="", catalog_name=""):
         "data_type": data_type,
         "spectral_indices": spectral_options,
         "processing_level": (
-            props.get("processing:level") or props.get("processing_level")
-            or ""
+            props.get("processing:level") or props.get("processing_level") or
+            ""
         ),
         "preview": preview,
         "assets": parsed_assets,

@@ -2007,8 +2007,8 @@ class ItemCard(QFrame):
     def _on_action(self, action, item, asset):
         """Route a card action: clip via controller, or full add/download."""
         if (
-            self.controller is not None
-            and self.controller.is_clip_mode()
+            self.controller is not None and
+            self.controller.is_clip_mode()
         ):
             self.controller.start_clip(item, asset, self.auth, action)
             return
@@ -3643,8 +3643,8 @@ class StacBrowserDialog(QDialog):
         if cat.get("auth") and items:
             has_creds = bool(
                 self._cred_for(cat).get("token") or (
-                    self._cred_for(cat).get("username")
-                    and self._cred_for(cat).get("password")
+                    self._cred_for(cat).get("username") and
+                    self._cred_for(cat).get("password")
                 )
             )
             if not has_creds:
