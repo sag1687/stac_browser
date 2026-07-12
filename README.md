@@ -45,7 +45,7 @@ Invece di aprire decine di portali diversi, definisci una zona d'interesse **una
 | ✂️ | **Ritaglio automatico** | Ritaglia al confine comunale (OSM/Nominatim) o alla geometria attiva, oppure scarica il dataset completo. |
 | 🔐 | **Cataloghi liberi / con login** | Tab Cataloghi in due sotto-schede, con licenza, sito ufficiale e campi utente/password/token/API. |
 | 🌐 | **Bilingue** | Interfaccia IT/EN commutabile in un clic. |
-| 🎨 | **Tema "Ocean Depth"** | Interfaccia scura moderna, compatibile **PyQt5 (QGIS 3)** e **PyQt6 (QGIS 4)**. |
+| 🎨 | **Tema scuro "slate blue"** | Interfaccia scura condivisa della famiglia SinoCloud, compatibile **PyQt5 (QGIS 3)** e **PyQt6 (QGIS 4)**. |
 
 ### 🗂️ Cataloghi inclusi
 | Catalogo | Dati principali | Licenza |
@@ -117,7 +117,7 @@ Instead of opening a dozen different portals, you define your area of interest *
 | ✂️ | **Automatic clip** | Clip to a municipal boundary (OSM/Nominatim) or the active geometry, or download the full dataset. |
 | 🔐 | **Open / login catalogs** | Catalogs tab with two sub-tabs, showing license, official site and username/password/token/API fields. |
 | 🌐 | **Bilingual** | One-click IT/EN interface. |
-| 🎨 | **"Ocean Depth" theme** | Modern dark UI, compatible with **PyQt5 (QGIS 3)** and **PyQt6 (QGIS 4)**. |
+| 🎨 | **"Slate blue" dark theme** | Shared SinoCloud-family dark UI, compatible with **PyQt5 (QGIS 3)** and **PyQt6 (QGIS 4)**. |
 
 ### 🗂️ Included catalogs
 | Catalog | Main data | License |
@@ -226,18 +226,34 @@ Il codice è verificato con **flake8** (0 warning) e coperto da test unitari per
 **IT — Il download chiede un login.** Alcuni dataset (Copernicus, parte di NASA) richiedono una registrazione gratuita presso il provider.
 **EN — A download asks for a login.** Some datasets (Copernicus, part of NASA) require a free account with the provider.
 
+## 📸 Screenshot
+
+| Scheda Ricerca / Search tab | Scheda Info con menù a tendina / Info tab with drop-down |
+|---|---|
+| ![Ricerca](screenshots/stac_browser_search_tab.png) | ![Info](screenshots/stac_browser_info_tab.png) |
+
+> **IT** · A sinistra la scheda di ricerca (area, indirizzo, cataloghi); a destra la scheda Info con il menù a tendina degli altri plugin dell'autore. · **EN** · On the left the search tab (area, address, catalogs); on the right the Info tab with the drop-down of the author's other plugins.
+
 ## 👤 Autore / Author
 Sviluppato da / Developed by **Dott. Sarino Alfonso Grande**.
-- ✉️ **Email:** sino.grande@gmail.com
-- 🌐 **GeoFusion WebGIS:** [sinocloud.it](https://sinocloud.it)
-- 🐙 **GitHub:** [sinogrande](https://github.com/sag1687)
+- ✉️ **Email:** [sino.grande@gmail.com](mailto:sino.grande@gmail.com)
+- 🌐 **Sito ufficiale / Official website:** [sinocloud.it](https://sinocloud.it)
+- 🐙 **GitHub:** [sag1687](https://github.com/sag1687)
 
 ### Altri plugin dell'autore / Other plugins by the author
-**Profili, Sezioni e Comuni** · **Q-Press** · **QGIS Ledger** · **Geobridge** · **CRS Fixer** · **GeoCSV Mapper** · **GeoFusion WebGIS**
+| Plugin | Repository |
+|---|---|
+| **SARIAG** | [github.com/sag1687/sariag](https://github.com/sag1687/sariag) |
+| **GeoBridge** | [github.com/sag1687/geobridge](https://github.com/sag1687/geobridge) |
+| **Quick CRS Fixer** | [github.com/sag1687/CRS_FIXER](https://github.com/sag1687/CRS_FIXER) |
+| **GeoCSV Mapper** | [github.com/sag1687/GeoCSV-Mapper](https://github.com/sag1687/GeoCSV-Mapper) |
+| **Q-Press** | [github.com/sag1687/q_press](https://github.com/sag1687/q_press) |
+| **QGIS Ledger** | [github.com/sag1687/qgis_ledger](https://github.com/sag1687/qgis_ledger) |
+| **TAF Italia** | [github.com/sag1687/TAF_ITALIA_DOWNLOAD](https://github.com/sag1687/TAF_ITALIA_DOWNLOAD) |
 
 ## 📜 Licenza / License
-**GPL-2.0** — Copyright © 2024 Dott. Sarino Alfonso Grande.
+**GPL-2.0** — Copyright © 2026 Dott. Sarino Alfonso Grande.
 Questo plugin è software libero, ridistribuibile secondo i termini della GNU GPL v2. / This plugin is free software, redistributable under the terms of the GNU GPL v2.
 
 ---
-*Progettato con interfaccia "Ocean Depth" e compatibilità estesa Qt5/Qt6. / Designed with the "Ocean Depth" interface and extended Qt5/Qt6 compatibility.*
+*Progettato con il tema scuro "slate blue" condiviso della famiglia di plugin SinoCloud e compatibilità estesa Qt5/Qt6 (QGIS 3 e QGIS 4). / Designed with the shared "slate blue" dark theme of the SinoCloud plugin family and extended Qt5/Qt6 (QGIS 3 and QGIS 4) compatibility.*

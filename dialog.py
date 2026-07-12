@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2024 Dott. Sarino Alfonso Grande <sino.grande@gmail.com>
+# Copyright (C) 2026 Dott. Sarino Alfonso Grande <sino.grande@gmail.com>
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -58,6 +58,7 @@ except ImportError:
     _iface = None
 
 from .qt_compat import ensure_qt_compat, QtCompat
+from . import plugin_hub
 from .core_stac import (
     STAC_CATALOGS, stac_search, stac_collections, geocode_nominatim,
     nominatim_polygon, parse_stac_item, best_raster_asset,
@@ -104,36 +105,36 @@ def _en_it(en, it):
 
 OCEAN_STYLE = """
 QDialog {
-    background-color: #020e1a;
-    color: #d0f0ff;
+    background-color: #141a22;
+    color: #f2f5f8;
     font-family: 'Segoe UI', 'Inter', 'Roboto', Tahoma, Geneva,
                  Verdana, sans-serif;
     font-size: 13px;
 }
-QWidget { background-color: #020e1a; color: #d0f0ff; }
-QLabel { color: #7ac8d8; font-size: 13px; }
+QWidget { background-color: #141a22; color: #f2f5f8; }
+QLabel { color: #c3ccd6; font-size: 13px; }
 QGroupBox {
-    border: 1px solid #0a4a6e;
+    border: 1px solid #2c3a48;
     border-radius: 8px;
     margin-top: 10px;
     padding: 12px 10px;
     background: qlineargradient(x1:0,y1:0,x2:0,y2:1,
-                stop:0 #071c2e,stop:1 #020e1a);
-    color: #d0f0ff;
+                stop:0 #1b2430,stop:1 #141a22);
+    color: #f2f5f8;
     font-weight: 600;
 }
 QGroupBox::title {
     subcontrol-origin: margin;
     left: 10px;
     padding: 0 6px;
-    color: #00e5ff;
+    color: #5b9bd5;
     font-size: 12px;
 }
 QPushButton {
     background: qlineargradient(x1:0,y1:0,x2:0,y2:1,
-                stop:0 #006688,stop:1 #004455);
-    color: #00e5ff;
-    border: 1px solid #00e5ff;
+                stop:0 #3f6f9e,stop:1 #2c4f70);
+    color: #5b9bd5;
+    border: 1px solid #5b9bd5;
     border-radius: 6px;
     padding: 7px 14px;
     font-weight: 700;
@@ -141,115 +142,115 @@ QPushButton {
 }
 QPushButton:hover {
     background: qlineargradient(x1:0,y1:0,x2:0,y2:1,
-                stop:0 #0099bb,stop:1 #006688);
-    color: #d0f0ff;
+                stop:0 #4d84b8,stop:1 #3f6f9e);
+    color: #f2f5f8;
 }
-QPushButton:pressed { background: #004455; }
+QPushButton:pressed { background: #2c4f70; }
 QPushButton:disabled {
-    background: #071c2e; color: #4a8090; border-color: #0a3a58;
+    background: #1b2430; color: #8a97a5; border-color: #2c4f70;
 }
 QPushButton#btnLang {
-    background: #071c2e;
-    color: #7ac8d8;
-    border: 1px solid #0a4a6e;
+    background: #1b2430;
+    color: #c3ccd6;
+    border: 1px solid #2c3a48;
     padding: 4px 10px;
     font-size: 11px;
     font-weight: 700;
     border-radius: 4px;
 }
-QPushButton#btnLang:hover { background: #0d2d42; color: #00e5ff; }
+QPushButton#btnLang:hover { background: #22303e; color: #5b9bd5; }
 QPushButton#btnClose {
-    background: #071c2e;
-    color: #7ac8d8;
-    border: 1px solid #0a4a6e;
+    background: #1b2430;
+    color: #c3ccd6;
+    border: 1px solid #2c3a48;
 }
-QPushButton#btnClose:hover { background: #0d2d42; color: #d0f0ff; }
+QPushButton#btnClose:hover { background: #22303e; color: #f2f5f8; }
 QComboBox, QSpinBox, QDoubleSpinBox, QLineEdit, QDateEdit {
     padding: 5px 8px;
-    border: 1px solid #0a4a6e;
+    border: 1px solid #2c3a48;
     border-radius: 5px;
-    background: #071c2e;
-    color: #d0f0ff;
-    selection-background-color: #0a4a6e;
+    background: #1b2430;
+    color: #f2f5f8;
+    selection-background-color: #2c3a48;
 }
 QComboBox:focus, QSpinBox:focus, QDoubleSpinBox:focus,
 QLineEdit:focus, QDateEdit:focus {
-    border-color: #00e5ff;
+    border-color: #5b9bd5;
 }
 QComboBox::drop-down { border: none; padding-right: 6px; }
 QTabWidget::pane {
-    border: 1px solid #0a4a6e;
+    border: 1px solid #2c3a48;
     border-radius: 6px;
     top: -1px;
-    background: #020e1a;
+    background: #141a22;
 }
 QTabBar::tab {
-    background: #071c2e;
-    border: 1px solid #0a4a6e;
+    background: #1b2430;
+    border: 1px solid #2c3a48;
     padding: 7px 14px;
     margin-right: 2px;
     border-top-left-radius: 6px;
     border-top-right-radius: 6px;
-    color: #4a8090;
+    color: #8a97a5;
     font-size: 12px;
 }
 QTabBar::tab:selected {
-    background: #020e1a;
-    border-bottom-color: #020e1a;
+    background: #141a22;
+    border-bottom-color: #141a22;
     font-weight: bold;
-    color: #00e5ff;
+    color: #5b9bd5;
 }
-QTabBar::tab:hover:!selected { background: #0d2d42; color: #7ac8d8; }
+QTabBar::tab:hover:!selected { background: #22303e; color: #c3ccd6; }
 QProgressBar {
-    border: 1px solid #0a4a6e;
+    border: 1px solid #2c3a48;
     border-radius: 4px;
     height: 6px;
-    background: #071c2e;
+    background: #1b2430;
     color: transparent;
 }
 QProgressBar::chunk {
     background: qlineargradient(x1:0,y1:0,x2:1,y2:0,
-                stop:0 #0099bb,stop:1 #00e5ff);
+                stop:0 #4d84b8,stop:1 #5b9bd5);
     border-radius: 3px;
 }
-QCheckBox { color: #7ac8d8; spacing: 6px; }
+QCheckBox { color: #c3ccd6; spacing: 6px; }
 QCheckBox::indicator {
     width: 16px; height: 16px;
     border-radius: 3px;
-    border: 1px solid #0a4a6e;
-    background: #071c2e;
+    border: 1px solid #2c3a48;
+    background: #1b2430;
 }
-QCheckBox::indicator:checked { background: #00e5ff; border-color: #00e5ff; }
+QCheckBox::indicator:checked { background: #5b9bd5; border-color: #5b9bd5; }
 QListWidget {
-    background: #071c2e;
-    border: 1px solid #0a4a6e;
+    background: #1b2430;
+    border: 1px solid #2c3a48;
     border-radius: 5px;
-    color: #d0f0ff;
+    color: #f2f5f8;
     font-size: 12px;
 }
 QListWidget::item { padding: 5px 8px; }
-QListWidget::item:selected { background: #0a4a6e; color: #00e5ff; }
-QListWidget::item:hover { background: #0d2d42; }
+QListWidget::item:selected { background: #2c3a48; color: #5b9bd5; }
+QListWidget::item:hover { background: #22303e; }
 QTextBrowser {
-    background: #071c2e;
-    border: 1px solid #0a4a6e;
+    background: #1b2430;
+    border: 1px solid #2c3a48;
     border-radius: 5px;
-    color: #7ac8d8;
+    color: #c3ccd6;
     font-size: 12px;
 }
-QScrollArea { background: #020e1a; border: none; }
+QScrollArea { background: #141a22; border: none; }
 QScrollBar:vertical, QScrollBar:horizontal {
-    background: #071c2e;
+    background: #1b2430;
     border: none;
     width: 8px; height: 8px;
 }
 QScrollBar::handle:vertical, QScrollBar::handle:horizontal {
-    background: #0a4a6e;
+    background: #2c3a48;
     border-radius: 4px;
     min-height: 20px;
 }
 QScrollBar::handle:vertical:hover, QScrollBar::handle:horizontal:hover {
-    background: #00e5ff;
+    background: #5b9bd5;
 }
 QScrollBar::add-line, QScrollBar::sub-line { height: 0; width: 0; }
 QFrame { background: transparent; }
@@ -263,29 +264,29 @@ INFO_HTML = """
 <html>
 <head>
 <style>
-  body { background:#020e1a; color:#d0f0ff;
+  body { background:#141a22; color:#f2f5f8;
          font-family:'Segoe UI',Arial,sans-serif;
          font-size:12px; margin:16px; line-height:1.6; }
-  h2   { color:#00e5ff; font-size:15px; margin:0 0 12px;
-         border-bottom:1px solid #0d2d42; padding-bottom:6px; }
+  h2   { color:#5b9bd5; font-size:15px; margin:0 0 12px;
+         border-bottom:1px solid #22303e; padding-bottom:6px; }
   h3   { color:#60a5fa; font-size:13px; margin:16px 0 6px; }
   h4   { color:#f59e0b; font-size:12px; margin:12px 0 4px; }
-  p, li { margin:3px 0; color:#7ac8d8; }
-  a    { color:#00e5ff; }
-  code { background:#0d2d42; padding:1px 4px; border-radius:3px;
+  p, li { margin:3px 0; color:#c3ccd6; }
+  a    { color:#5b9bd5; }
+  code { background:#22303e; padding:1px 4px; border-radius:3px;
          font-family:monospace; }
   table { border-collapse:collapse; width:100%; margin:8px 0; }
-  th   { background:#0d2d42; color:#7ac8d8; padding:6px 10px; text-align:left;
-         border-bottom:2px solid #0a4a6e; font-size:11px; }
-  td   { padding:5px 10px; border-bottom:1px solid #0d2d42; color:#d0f0ff; }
-  tr:nth-child(even) td { background:rgba(7,28,46,0.5); }
+  th   { background:#22303e; color:#c3ccd6; padding:6px 10px; text-align:left;
+         border-bottom:2px solid #2c3a48; font-size:11px; }
+  td   { padding:5px 10px; border-bottom:1px solid #22303e; color:#f2f5f8; }
+  tr:nth-child(even) td { background:rgba(27,36,48,0.5); }
   .badge-warn { background:rgba(239,68,68,0.15); color:#ef4444;
                 padding:1px 6px; border-radius:8px; font-size:11px;
                 font-weight:600; }
   .badge-ok   { background:rgba(34,197,94,0.15); color:#22c55e;
                 padding:1px 6px; border-radius:8px; font-size:11px;
                 font-weight:600; }
-  .section-sep { border:none; border-top:1px solid #0d2d42; margin:16px 0; }
+  .section-sep { border:none; border-top:1px solid #22303e; margin:16px 0; }
 </style>
 </head>
 <body>
@@ -508,23 +509,26 @@ Official site / Sito ufficiale:
 
 <hr class="section-sep"/>
 <h3>OTHER PLUGINS BY THE AUTHOR / ALTRI PLUGIN DELL'AUTORE</h3>
+<p>IT: usa il menù a tendina in fondo a questa scheda per scoprire gli
+altri plugin della famiglia e aprire i rispettivi repository GitHub.<br>
+EN: use the drop-down at the bottom of this tab to discover the other
+plugins of the family and open their GitHub repositories.</p>
 <ul>
-  <li><b>Profili, Sezioni e Comuni</b> &mdash; Elevation profiles and cross
-      sections / Profili altimetrici e sezioni trasversali</li>
-  <li><b>Q-Press</b> &mdash; Professional cartographic PDF generator /
-      Generatore PDF cartografico professionale</li>
-  <li><b>QGIS Ledger</b> &mdash; Field data collection with NextCloud sync /
-      Raccolta dati field con sync NextCloud</li>
-  <li><b>Geobridge</b> &mdash; Geodetic coordinate conversion and datum
-      transformations / Conversione coordinate geodetiche e trasformazioni di
-      datum</li>
-  <li><b>CRS Fixer</b> &mdash; Automatic layer CRS correction / Correzione
-      automatica CRS layer</li>
+  <li><b>SARIAG</b> &mdash; Sentinel-1 InSAR displacement time series /
+      Serie temporali di spostamento InSAR Sentinel-1</li>
+  <li><b>GeoBridge</b> &mdash; Unofficial IGM client: coordinate and layer
+      conversion / Client IGM non ufficiale: conversione coordinate e
+      layer</li>
+  <li><b>Quick CRS Fixer</b> &mdash; Automatic layer CRS correction /
+      Correzione automatica CRS layer</li>
   <li><b>GeoCSV Mapper</b> &mdash; Advanced geographic CSV import /
       Importazione CSV geografici avanzata</li>
-  <li><b>GeoFusion WebGIS</b> &mdash; Open-source WebGIS platform /
-      Piattaforma WebGIS open source &mdash;
-      <a href="https://sinocloud.it">sinocloud.it</a></li>
+  <li><b>Q-Press</b> &mdash; Professional cartographic PDF generator /
+      Generatore PDF cartografico professionale</li>
+  <li><b>QGIS Ledger</b> &mdash; Git-like version control for QGIS /
+      Versionamento in stile Git per QGIS</li>
+  <li><b>TAF Italia</b> &mdash; Cadastral Fiducial Points download /
+      Download Punti Fiduciali catastali</li>
 </ul>
 <p>Author / Autore: Dott. Sarino Alfonso Grande &nbsp;|&nbsp;
    <a href="mailto:sino.grande@gmail.com">sino.grande@gmail.com</a>
@@ -533,7 +537,7 @@ Official site / Sito ufficiale:
 
 <hr class="section-sep"/>
 <h3>PLUGIN LICENSE / LICENZA PLUGIN</h3>
-<p>GPL-2.0 &mdash; Copyright (C) 2024 Dott. Sarino Alfonso Grande<br>
+<p>GPL-2.0 &mdash; Copyright (C) 2026 Dott. Sarino Alfonso Grande<br>
 This plugin is free software: you can redistribute it and/or modify it
 under the terms of the GNU General Public License version 2.<br>
 Questo plugin &egrave; software libero: puoi redistribuirlo e/o modificarlo
@@ -874,7 +878,7 @@ class _ItemDetailsDialog(QDialog):
         title = QLabel(_item_title(item, 96))
         title.setWordWrap(True)
         title.setStyleSheet(
-            "color:#00e5ff; font-size:15px; font-weight:700;"
+            "color:#5b9bd5; font-size:15px; font-weight:700;"
             "padding:4px 0;"
         )
         layout.addWidget(title)
@@ -945,19 +949,19 @@ class _ItemDetailsDialog(QDialog):
 
         style = """
         <style>
-        body { background:#020e1a; color:#d0f0ff; font-family:Segoe UI;
+        body { background:#141a22; color:#f2f5f8; font-family:Segoe UI;
                font-size:12px; }
-        h3 { color:#00e5ff; margin:8px 0; }
-        h4 { color:#7ac8d8; margin:14px 0 6px; }
+        h3 { color:#5b9bd5; margin:8px 0; }
+        h4 { color:#c3ccd6; margin:14px 0 6px; }
         table { border-collapse:collapse; width:100%; }
-        td, th { border-bottom:1px solid #0a4a6e; padding:6px;
+        td, th { border-bottom:1px solid #2c3a48; padding:6px;
                  vertical-align:top; }
-        th { color:#00e5ff; text-align:left; width:170px; }
+        th { color:#5b9bd5; text-align:left; width:170px; }
         a { color:#3b82f6; }
-        .pill { display:inline-block; border:1px solid #0a4a6e;
-                border-radius:8px; padding:3px 8px; color:#00e5ff;
-                background:#071c2e; }
-        span { color:#7ac8d8; }
+        .pill { display:inline-block; border:1px solid #2c3a48;
+                border-radius:8px; padding:3px 8px; color:#5b9bd5;
+                background:#1b2430; }
+        span { color:#c3ccd6; }
         </style>
         """
         return """
@@ -1247,7 +1251,7 @@ class _SpectralProgressDialog(QDialog):
             "Download ed elaborazione del dato in corso...",
         ))
         self.lbl.setAlignment(QtCompat.AlignCenter)
-        self.lbl.setStyleSheet("color:#d0f0ff;")
+        self.lbl.setStyleSheet("color:#f2f5f8;")
         layout.addWidget(self.lbl)
 
         self.bar = QProgressBar()
@@ -1256,7 +1260,7 @@ class _SpectralProgressDialog(QDialog):
         layout.addWidget(self.bar)
 
         self.lbl_status = QLabel("")
-        self.lbl_status.setStyleSheet("color:#4a8090; font-size:11px;")
+        self.lbl_status.setStyleSheet("color:#8a97a5; font-size:11px;")
         layout.addWidget(self.lbl_status)
 
         self.btn_close = QPushButton(_en_it("Close", "Chiudi"))
@@ -1334,7 +1338,7 @@ class _BandSelectionDialog(QDialog):
             "Select bands to download",
             "Seleziona le bande da scaricare",
         ))
-        title.setStyleSheet("color:#00e5ff; font-size:14px; font-weight:700;")
+        title.setStyleSheet("color:#5b9bd5; font-size:14px; font-weight:700;")
         layout.addWidget(title)
 
         note = QLabel(_en_it(
@@ -1344,7 +1348,7 @@ class _BandSelectionDialog(QDialog):
             "salvate localmente prima del caricamento in QGIS.",
         ))
         note.setWordWrap(True)
-        note.setStyleSheet("color:#7ac8d8; font-size:12px;")
+        note.setStyleSheet("color:#c3ccd6; font-size:12px;")
         layout.addWidget(note)
 
         scroll = QScrollArea()
@@ -1422,7 +1426,7 @@ class _SpectralCompareDialog(QDialog):
         layout = QVBoxLayout(self)
         title = QLabel(_item_title(item, 82))
         title.setWordWrap(True)
-        title.setStyleSheet("color:#00e5ff; font-size:14px; font-weight:700;")
+        title.setStyleSheet("color:#5b9bd5; font-size:14px; font-weight:700;")
         layout.addWidget(title)
 
         intro = QLabel(_en_it(
@@ -1435,7 +1439,7 @@ class _SpectralCompareDialog(QDialog):
             "GeoTIFF locale.",
         ))
         intro.setWordWrap(True)
-        intro.setStyleSheet("color:#7ac8d8; font-size:12px;")
+        intro.setStyleSheet("color:#c3ccd6; font-size:12px;")
         layout.addWidget(intro)
 
         self.index_buttons = []
@@ -1488,15 +1492,15 @@ class _SpectralCompareDialog(QDialog):
     def _option_widget(self, opt):
         frame = QFrame()
         frame.setStyleSheet(
-            "QFrame { background:#071c2e; border:1px solid #0a4a6e;"
+            "QFrame { background:#1b2430; border:1px solid #2c3a48;"
             "border-radius:8px; } QLabel { background:transparent; }"
         )
         box = QVBoxLayout(frame)
         box.setContentsMargins(10, 8, 10, 8)
 
         label = _en_it(opt.get("label_en"), opt.get("label_it"))
-        lbl = QLabel("<b style='color:#00e5ff;'>%s</b><br>"
-                     "<span style='color:#7ac8d8;'>%s</span>" % (
+        lbl = QLabel("<b style='color:#5b9bd5;'>%s</b><br>"
+                     "<span style='color:#c3ccd6;'>%s</span>" % (
                          _html_escape(label), _html_escape(opt.get("formula"))
                      ))
         lbl.setTextFormat(QtCompat.RichText)
@@ -1507,7 +1511,7 @@ class _SpectralCompareDialog(QDialog):
                            for k, v in assets.items())
         lbl_assets = QLabel(bands)
         lbl_assets.setWordWrap(True)
-        lbl_assets.setStyleSheet("color:#4a8090; font-size:11px;")
+        lbl_assets.setStyleSheet("color:#8a97a5; font-size:11px;")
         box.addWidget(lbl_assets)
 
         row = QHBoxLayout()
@@ -1741,11 +1745,11 @@ class ItemCard(QFrame):
         self.setStyleSheet("""
             ItemCard {
                 background: qlineargradient(x1:0,y1:0,x2:0,y2:1,
-                    stop:0 #0d2d42, stop:1 #020e1a);
-                border: 1px solid #0a4a6e;
+                    stop:0 #22303e, stop:1 #141a22);
+                border: 1px solid #2c3a48;
                 border-radius: 10px;
             }
-            ItemCard:hover { border-color: #0099bb; }
+            ItemCard:hover { border-color: #4d84b8; }
         """)
         self.setFixedWidth(240)
 
@@ -1757,7 +1761,7 @@ class ItemCard(QFrame):
         self._preview_label = QLabel()
         self._preview_label.setFixedSize(224, 112)
         self._preview_label.setStyleSheet(
-            "background:#020e1a; border-radius:6px; border:1px solid #0a4a6e;"
+            "background:#141a22; border-radius:6px; border:1px solid #2c3a48;"
         )
         self._preview_label.setAlignment(QtCompat.AlignCenter)
         self._preview_label.setText("🛰️")
@@ -1768,7 +1772,7 @@ class ItemCard(QFrame):
         if collection:
             lbl_col = QLabel(collection)
             lbl_col.setStyleSheet(
-                "background:rgba(52,211,153,0.12); color:#00e5ff;"
+                "background:rgba(52,211,153,0.12); color:#5b9bd5;"
                 "padding:2px 8px;"
                 "border-radius:8px; font-size:10px; font-weight:600;"
             )
@@ -1783,7 +1787,7 @@ class ItemCard(QFrame):
             )
         )
         lbl_dtype.setStyleSheet(
-            "background:rgba(0,229,255,0.08); color:#7ac8d8;"
+            "background:rgba(91,155,213,0.08); color:#c3ccd6;"
             "padding:2px 8px; border-radius:8px; font-size:10px;"
             "font-weight:600;"
         )
@@ -1793,7 +1797,7 @@ class ItemCard(QFrame):
         # Item ID (truncated)
         item_id = item.get("id") or "—"
         lbl_id = QLabel(item_id)
-        lbl_id.setStyleSheet("color:#d0f0ff; font-size:11px; font-weight:600;")
+        lbl_id.setStyleSheet("color:#f2f5f8; font-size:11px; font-weight:600;")
         lbl_id.setToolTip(item_id)
         lbl_id.setMaximumWidth(224)
         fm = lbl_id.fontMetrics()
@@ -1816,7 +1820,7 @@ class ItemCard(QFrame):
                 pass
         if meta_parts:
             lbl_meta = QLabel("  ".join(meta_parts))
-            lbl_meta.setStyleSheet("color:#7ac8d8; font-size:11px;")
+            lbl_meta.setStyleSheet("color:#c3ccd6; font-size:11px;")
             layout.addWidget(lbl_meta)
 
         # Metrics row
@@ -1838,7 +1842,7 @@ class ItemCard(QFrame):
             metrics.append(f"⚙ {level}")
         if metrics:
             lbl_metrics = QLabel("  ".join(metrics))
-            lbl_metrics.setStyleSheet("color:#4a8090; font-size:10px;")
+            lbl_metrics.setStyleSheet("color:#8a97a5; font-size:10px;")
             lbl_metrics.setWordWrap(True)
             layout.addWidget(lbl_metrics)
 
@@ -1850,7 +1854,7 @@ class ItemCard(QFrame):
                     ", ".join(role.upper() for role in band_roles[:6]),
                 )
             )
-            lbl_roles.setStyleSheet("color:#4a8090; font-size:10px;")
+            lbl_roles.setStyleSheet("color:#8a97a5; font-size:10px;")
             lbl_roles.setWordWrap(True)
             layout.addWidget(lbl_roles)
 
@@ -1859,21 +1863,21 @@ class ItemCard(QFrame):
         if assets:
             lbl_assets_title = QLabel(_t(lang, "Asset:", "Assets:"))
             lbl_assets_title.setStyleSheet(
-                "color:#4a8090; font-size:10px; margin-top:4px;")
+                "color:#8a97a5; font-size:10px; margin-top:4px;")
             layout.addWidget(lbl_assets_title)
 
             for a in assets[:6]:
                 a_title = a.get("title") or a.get("key") or ""
                 a_type = a.get("type") or ""
                 icon = "📥" if a.get("is_raster") else "📎"
-                color = "#00e5ff" if a.get("is_raster") else "#4a8090"
+                color = "#5b9bd5" if a.get("is_raster") else "#8a97a5"
                 size_mb = a.get("size_mb")
                 size_str = f" ({size_mb} MB)" if size_mb is not None else ""
                 lbl_a = QLabel(
                     f'<span style="color:{color}">{icon}</span>'
                     f' <span style="font-size:10px;">'
                     f'{a_title[:28]}{size_str}</span>')
-                lbl_a.setStyleSheet("color:#7ac8d8;")
+                lbl_a.setStyleSheet("color:#c3ccd6;")
                 lbl_a.setToolTip(f"{a_title}\n{a_type}\n{a.get('href', '')}")
                 layout.addWidget(lbl_a)
 
@@ -2091,7 +2095,7 @@ class _DownloadProgressDialog(QDialog):
         self.lbl = QLabel(
             _t(lang, f"Scaricando {fname}...", f"Downloading {fname}..."))
         self.lbl.setAlignment(QtCompat.AlignCenter)
-        self.lbl.setStyleSheet("color:#d0f0ff;")
+        self.lbl.setStyleSheet("color:#f2f5f8;")
         layout.addWidget(self.lbl)
 
         self.bar = QProgressBar()
@@ -2100,7 +2104,7 @@ class _DownloadProgressDialog(QDialog):
         layout.addWidget(self.bar)
 
         self.lbl_status = QLabel("")
-        self.lbl_status.setStyleSheet("color:#4a8090; font-size:11px;")
+        self.lbl_status.setStyleSheet("color:#8a97a5; font-size:11px;")
         layout.addWidget(self.lbl_status)
 
         btn_cancel = QPushButton(_t(lang, "Annulla", "Cancel"))
@@ -2232,7 +2236,7 @@ class _ProcessingDialog(QDialog):
             _t(lang, "Ritaglio in corso…", "Clipping in progress…")
         )
         self.lbl.setAlignment(QtCompat.AlignCenter)
-        self.lbl.setStyleSheet("color:#d0f0ff;")
+        self.lbl.setStyleSheet("color:#f2f5f8;")
         layout.addWidget(self.lbl)
 
         self.bar = QProgressBar()
@@ -2242,7 +2246,7 @@ class _ProcessingDialog(QDialog):
 
         self.lbl_status = QLabel("")
         self.lbl_status.setAlignment(QtCompat.AlignCenter)
-        self.lbl_status.setStyleSheet("color:#4a8090; font-size:11px;")
+        self.lbl_status.setStyleSheet("color:#8a97a5; font-size:11px;")
         layout.addWidget(self.lbl_status)
 
         # Pulse animation driven by a timer; pace set by progress.
@@ -2361,12 +2365,12 @@ class StacBrowserDialog(QDialog):
         hf.setPointSize(15)
         hf.setBold(True)
         self.lbl_header.setFont(hf)
-        self.lbl_header.setStyleSheet("color: #00e5ff; padding: 4px 0;")
+        self.lbl_header.setStyleSheet("color: #5b9bd5; padding: 4px 0;")
         header_row.addWidget(self.lbl_header)
         header_row.addStretch()
-        self.btn_lang = QPushButton("EN")
+        self.btn_lang = QPushButton(plugin_hub.LANG_LABEL_EN)
         self.btn_lang.setObjectName("btnLang")
-        self.btn_lang.setFixedWidth(48)
+        self.btn_lang.setFixedWidth(72)
         self.btn_lang.clicked.connect(self._toggle_lang)
         header_row.addWidget(self.btn_lang)
         main_layout.addLayout(header_row)
@@ -2392,7 +2396,7 @@ class StacBrowserDialog(QDialog):
         # ── Status bar ────────────────────────────────────────────
         status_row = QHBoxLayout()
         self.lbl_status = QLabel("")
-        self.lbl_status.setStyleSheet("color: #4a8090; font-size: 11px;")
+        self.lbl_status.setStyleSheet("color: #8a97a5; font-size: 11px;")
         self.progress_global = QProgressBar()
         self.progress_global.setRange(0, 0)
         self.progress_global.setVisible(False)
@@ -2700,7 +2704,7 @@ class StacBrowserDialog(QDialog):
         self.chk_auto.setChecked(True)
         auto_row.addWidget(self.chk_auto)
         self.lbl_bbox = QLabel()
-        self.lbl_bbox.setStyleSheet("color:#4a8090; font-size:11px;")
+        self.lbl_bbox.setStyleSheet("color:#8a97a5; font-size:11px;")
         auto_row.addWidget(self.lbl_bbox, 1)
         act_layout.addLayout(auto_row)
 
@@ -2715,7 +2719,7 @@ class StacBrowserDialog(QDialog):
 
         # Progress indicator (inside search group)
         self.lbl_search_status = QLabel("")
-        self.lbl_search_status.setStyleSheet("color:#7ac8d8; font-size:11px;")
+        self.lbl_search_status.setStyleSheet("color:#c3ccd6; font-size:11px;")
         act_layout.addWidget(self.lbl_search_status)
         self.progress_search = QProgressBar()
         self.progress_search.setRange(0, 0)
@@ -2762,7 +2766,7 @@ class StacBrowserDialog(QDialog):
         # Summary label at top
         self.lbl_summary = QLabel("")
         self.lbl_summary.setStyleSheet(
-            "color:#00e5ff; font-size:13px; font-weight:600; padding:6px 4px;"
+            "color:#5b9bd5; font-size:13px; font-weight:600; padding:6px 4px;"
         )
         layout.addWidget(self.lbl_summary)
 
@@ -2795,7 +2799,7 @@ class StacBrowserDialog(QDialog):
         self.lbl_account_intro = QLabel()
         self.lbl_account_intro.setWordWrap(True)
         self.lbl_account_intro.setStyleSheet(
-            "color:#7ac8d8; font-size:12px; padding:4px 2px;"
+            "color:#c3ccd6; font-size:12px; padding:4px 2px;"
         )
         outer.addWidget(self.lbl_account_intro)
 
@@ -2856,13 +2860,13 @@ class StacBrowserDialog(QDialog):
 
         desc = QLabel(cat.get("description", ""))
         desc.setWordWrap(True)
-        desc.setStyleSheet("color:#7ac8d8; font-size:11px;")
+        desc.setStyleSheet("color:#c3ccd6; font-size:11px;")
         form.addWidget(desc)
 
         lic = QLabel()
         lic.setOpenExternalLinks(True)
         lic.setWordWrap(True)
-        lic.setStyleSheet("color:#4a8090; font-size:11px;")
+        lic.setStyleSheet("color:#8a97a5; font-size:11px;")
         lic_url = cat.get("license_url")
         lic_txt = cat.get("license", "")
         if lic_url:
@@ -3004,7 +3008,11 @@ class StacBrowserDialog(QDialog):
         browser = QTextBrowser()
         browser.setOpenExternalLinks(True)
         browser.setHtml(INFO_HTML)
-        layout.addWidget(browser)
+        layout.addWidget(browser, 1)
+        self.family_widget = plugin_hub.make_family_widget(
+            "stac_browser", lang=self.lang
+        )
+        layout.addWidget(self.family_widget)
 
     # ──────────────────────────────────────────────────────────────
     # Language toggle
@@ -3012,11 +3020,13 @@ class StacBrowserDialog(QDialog):
 
     def _toggle_lang(self):
         self.lang = "en" if self.lang == "it" else "it"
-        self.btn_lang.setText("IT" if self.lang == "en" else "EN")
         self._update_ui_lang()
 
     def _update_ui_lang(self):
         L = self.lang
+        self.btn_lang.setText(plugin_hub.lang_button_label(L))
+        if hasattr(self, "family_widget"):
+            self.family_widget.set_lang(L)
         self.setWindowTitle(
             _t(L, "GeoFusion — STAC Browser", "GeoFusion — STAC Browser"))
         self.lbl_header.setText(_t(L, "🛰️ STAC Browser", "🛰️ STAC Browser"))
@@ -3495,7 +3505,7 @@ class StacBrowserDialog(QDialog):
     def _make_timeline_widget(self, items):
         wrapper = QFrame()
         wrapper.setStyleSheet(
-            "QFrame { background:#071c2e; border:1px solid #0a4a6e;"
+            "QFrame { background:#1b2430; border:1px solid #2c3a48;"
             "border-radius:8px; } QLabel { background:transparent; }"
         )
         outer = QVBoxLayout(wrapper)
@@ -3505,7 +3515,7 @@ class StacBrowserDialog(QDialog):
         lbl = QLabel(_t(
             self.lang, "Timeline acquisizioni", "Acquisition timeline"
         ))
-        lbl.setStyleSheet("color:#00e5ff; font-size:12px; font-weight:700;")
+        lbl.setStyleSheet("color:#5b9bd5; font-size:12px; font-weight:700;")
         outer.addWidget(lbl)
 
         scroll = QScrollArea()
@@ -3532,10 +3542,10 @@ class StacBrowserDialog(QDialog):
             btn.setFixedSize(132, 48)
             btn.setToolTip(_item_title(item, 120))
             btn.setStyleSheet(
-                "QPushButton { background:#020e1a; border:1px solid #0a4a6e;"
-                "border-radius:8px; padding:4px; color:#7ac8d8;"
+                "QPushButton { background:#141a22; border:1px solid #2c3a48;"
+                "border-radius:8px; padding:4px; color:#c3ccd6;"
                 "font-size:10px; text-align:center; }"
-                "QPushButton:hover { border-color:#00e5ff; color:#d0f0ff; }"
+                "QPushButton:hover { border-color:#5b9bd5; color:#f2f5f8; }"
             )
             btn.clicked.connect(
                 lambda _checked, i=item: self._show_item_details(i)
@@ -3554,9 +3564,9 @@ class StacBrowserDialog(QDialog):
 
         spectral_count = len([i for i in items if i.get("spectral_indices")])
         hdr = QLabel(
-            '<span style="color:#00e5ff; font-weight:700;">%s %s</span>'
-            ' <span style="color:#7ac8d8;">· %s</span>'
-            ' <span style="color:#4a8090;">%s</span>' % (
+            '<span style="color:#5b9bd5; font-weight:700;">%s %s</span>'
+            ' <span style="color:#c3ccd6;">· %s</span>'
+            ' <span style="color:#8a97a5;">%s</span>' % (
                 _data_type_icon(type_key),
                 _html_escape(_data_type_label(self.lang, type_key)),
                 len(items),
@@ -3612,14 +3622,14 @@ class StacBrowserDialog(QDialog):
         if error and not items:
             header_lbl.setText(
                 f'<b style="color:#ef4444;">⚠️ {cat_name}</b>'
-                f' &nbsp;<span style="color:#4a8090; font-size:11px;">'
+                f' &nbsp;<span style="color:#8a97a5; font-size:11px;">'
                 f'{_t(self.lang, "Non disponibile", "Not available")}</span>'
             )
         else:
             header_lbl.setText(
-                f'<b style="color:#00e5ff;">🛰️ {cat_name}</b>'
-                f' &nbsp;<span style="color:#4a8090;">·</span>&nbsp;'
-                f'<span style="color:#7ac8d8;">'
+                f'<b style="color:#5b9bd5;">🛰️ {cat_name}</b>'
+                f' &nbsp;<span style="color:#8a97a5;">·</span>&nbsp;'
+                f'<span style="color:#c3ccd6;">'
                 f'{n} {_t(self.lang, "risultati", "results")}</span>'
                 f'&nbsp;&nbsp;<a href="{cat_url}" '
                 f'style="color:#3b82f6; font-size:11px;">↗ '
@@ -3675,13 +3685,13 @@ class StacBrowserDialog(QDialog):
                    "No results in this catalog.")
             )
             lbl_empty.setStyleSheet(
-                "color:#4a8090; font-size:11px; padding:4px;")
+                "color:#8a97a5; font-size:11px; padding:4px;")
             section_layout.addWidget(lbl_empty)
 
         # Separator line
         sep = QFrame()
         sep.setFrameShape(QFrame.Shape.HLine)
-        sep.setStyleSheet("color:#0a4a6e;")
+        sep.setStyleSheet("color:#2c3a48;")
         section_layout.addWidget(sep)
 
         # Insert before the stretch at the end
