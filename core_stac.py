@@ -876,6 +876,15 @@ def download_asset(href, output_path, progress_callback=None, auth=None):
     href = sign_href_if_needed(href)
     _check_url_scheme(href)  # rejects file:// and custom schemes
     auth = auth or {}
+    has_credentials = any(
+        (auth.get(k) or "").strip()
+        for k in ("token", "api_key", "username", "password")
+    )
+    if has_credentials and not href.lower().startswith("https://"):
+        raise ValueError(
+            "Credenziali su URL non-HTTPS rifiutate per sicurezza. / "
+            "Credentials over a non-HTTPS URL were refused for security."
+        )
     headers = dict(_HEADERS)
     token = (auth.get("token") or "").strip()
     if token:

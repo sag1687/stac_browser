@@ -1093,7 +1093,6 @@ def stac_index(in_ar, out_ar, xoff, yoff, xsize, ysize, raster_xsize,
         derived.append(source)
     root.append(derived)
 
-    gdal.SetConfigOption("GDAL_VRT_ENABLE_PYTHON", "YES")
     index_path = os.path.join(
         out_dir, "%s_%s.vrt" % (safe_id, option.get("key"))
     )
@@ -1144,7 +1143,17 @@ class SpectralIndexWorker(QThread):
                 creationOptions=["COMPRESS=DEFLATE", "TILED=YES"],
                 callback=_cb,
             )
-            ds = gdal.Translate(self.output_path, vrt_path, options=options)
+            # The VRT pixel function is plugin-generated Python: enable
+            # VRT Python only for this Translate, then restore, so other
+            # (potentially untrusted) VRTs opened later stay sandboxed.
+            previous = gdal.GetConfigOption("GDAL_VRT_ENABLE_PYTHON")
+            gdal.SetConfigOption("GDAL_VRT_ENABLE_PYTHON", "YES")
+            try:
+                ds = gdal.Translate(
+                    self.output_path, vrt_path, options=options
+                )
+            finally:
+                gdal.SetConfigOption("GDAL_VRT_ENABLE_PYTHON", previous)
             if ds is None:
                 raise RuntimeError("GDAL Translate failed.")
             ds = None
@@ -1697,6 +1706,15 @@ class _SpectralCompareDialog(QDialog):
             return
         try:
             vrt_path = _build_spectral_vrt(self.item, option, self.lang)
+            with open(vrt_path, "r", encoding="utf-8",
+                      errors="replace") as vrt_f:
+                needs_vrt_python = "VRTDerivedRasterBand" in vrt_f.read()
+            if needs_vrt_python:
+                # The live layer re-runs the plugin-generated pixel
+                # function at every canvas render, so VRT Python must
+                # stay enabled while the layer exists in the session.
+                from osgeo import gdal
+                gdal.SetConfigOption("GDAL_VRT_ENABLE_PYTHON", "YES")
             layer_name = "%s %s" % (
                 _item_title(self.item, 36),
                 option.get("label_it")
@@ -1718,9 +1736,6 @@ class _SpectralCompareDialog(QDialog):
                 )
         except Exception as exc:
             QMessageBox.warning(self, "STAC Browser", str(exc))
-
-    def _build_vrt(self, option):
-        return _build_spectral_vrt(self.item, option, self.lang)
 
 
 class ItemCard(QFrame):
