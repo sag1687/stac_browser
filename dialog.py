@@ -78,10 +78,10 @@ def _log(msg, level="warning"):
     if QgsMessageLog is None or Qgis is None:
         return
     lvl = {
-        "info": Qgis.Info,
-        "warning": Qgis.Warning,
-        "critical": Qgis.Critical,
-    }.get(level, Qgis.Warning)
+        "info": Qgis.MessageLevel.Info,
+        "warning": Qgis.MessageLevel.Warning,
+        "critical": Qgis.MessageLevel.Critical,
+    }.get(level, Qgis.MessageLevel.Warning)
     QgsMessageLog.logMessage(str(msg), "STAC Browser", lvl)
 
 
@@ -836,7 +836,7 @@ def _plugin_icon_path():
 
 def _make_progress_logo(size=56):
     logo = QLabel()
-    logo.setAlignment(QtCompat.AlignCenter)
+    logo.setAlignment(QtCompat.AlignmentFlag.AlignCenter)
     pix = QIcon(_plugin_icon_path()).pixmap(QSize(size, size))
     if not pix.isNull():
         logo.setPixmap(pix)
@@ -1246,7 +1246,7 @@ class _SpectralProgressDialog(QDialog):
         self.setStyleSheet(OCEAN_STYLE)
 
         layout = QVBoxLayout(self)
-        layout.setAlignment(QtCompat.AlignCenter)
+        layout.setAlignment(QtCompat.AlignmentFlag.AlignCenter)
 
         self.logo, self._opacity = _make_progress_logo(64)
         layout.addWidget(self.logo)
@@ -1259,7 +1259,7 @@ class _SpectralProgressDialog(QDialog):
             "Downloading and processing data...",
             "Download ed elaborazione del dato in corso...",
         ))
-        self.lbl.setAlignment(QtCompat.AlignCenter)
+        self.lbl.setAlignment(QtCompat.AlignmentFlag.AlignCenter)
         self.lbl.setStyleSheet("color:#f2f5f8;")
         layout.addWidget(self.lbl)
 
@@ -1512,7 +1512,7 @@ class _SpectralCompareDialog(QDialog):
                      "<span style='color:#c3ccd6;'>%s</span>" % (
                          _html_escape(label), _html_escape(opt.get("formula"))
                      ))
-        lbl.setTextFormat(QtCompat.RichText)
+        lbl.setTextFormat(QtCompat.TextFormat.RichText)
         box.addWidget(lbl)
 
         assets = opt.get("asset_keys") or {}
@@ -1778,7 +1778,7 @@ class ItemCard(QFrame):
         self._preview_label.setStyleSheet(
             "background:#141a22; border-radius:6px; border:1px solid #2c3a48;"
         )
-        self._preview_label.setAlignment(QtCompat.AlignCenter)
+        self._preview_label.setAlignment(QtCompat.AlignmentFlag.AlignCenter)
         self._preview_label.setText("🛰️")
         layout.addWidget(self._preview_label)
 
@@ -1791,7 +1791,7 @@ class ItemCard(QFrame):
                 "padding:2px 8px;"
                 "border-radius:8px; font-size:10px; font-weight:600;"
             )
-            lbl_col.setAlignment(QtCompat.AlignCenter)
+            lbl_col.setAlignment(QtCompat.AlignmentFlag.AlignCenter)
             layout.addWidget(lbl_col)
 
         dtype = item.get("data_type") or "other"
@@ -1806,7 +1806,7 @@ class ItemCard(QFrame):
             "padding:2px 8px; border-radius:8px; font-size:10px;"
             "font-weight:600;"
         )
-        lbl_dtype.setAlignment(QtCompat.AlignCenter)
+        lbl_dtype.setAlignment(QtCompat.AlignmentFlag.AlignCenter)
         layout.addWidget(lbl_dtype)
 
         # Item ID (truncated)
@@ -1816,7 +1816,7 @@ class ItemCard(QFrame):
         lbl_id.setToolTip(item_id)
         lbl_id.setMaximumWidth(224)
         fm = lbl_id.fontMetrics()
-        elided = fm.elidedText(item_id, QtCompat.ElideRight, 220)
+        elided = fm.elidedText(item_id, QtCompat.TextElideMode.ElideRight, 220)
         lbl_id.setText(elided)
         layout.addWidget(lbl_id)
 
@@ -2013,8 +2013,8 @@ class ItemCard(QFrame):
             return
         scaled = pixmap.scaled(
             QSize(224, 112),
-            QtCompat.KeepAspectRatio,
-            QtCompat.SmoothTransformation,
+            QtCompat.AspectRatioMode.KeepAspectRatio,
+            QtCompat.TransformationMode.SmoothTransformation,
         )
         self._preview_label.setPixmap(scaled)
         self._preview_label.setText("")
@@ -2097,7 +2097,7 @@ class _DownloadProgressDialog(QDialog):
         self.setStyleSheet(OCEAN_STYLE)
 
         layout = QVBoxLayout(self)
-        layout.setAlignment(QtCompat.AlignCenter)
+        layout.setAlignment(QtCompat.AlignmentFlag.AlignCenter)
         self.logo, self._opacity = _make_progress_logo(56)
         layout.addWidget(self.logo)
         self._fade_up = False
@@ -2109,7 +2109,7 @@ class _DownloadProgressDialog(QDialog):
         fname = os.path.basename(output_path)
         self.lbl = QLabel(
             _t(lang, f"Scaricando {fname}...", f"Downloading {fname}..."))
-        self.lbl.setAlignment(QtCompat.AlignCenter)
+        self.lbl.setAlignment(QtCompat.AlignmentFlag.AlignCenter)
         self.lbl.setStyleSheet("color:#f2f5f8;")
         layout.addWidget(self.lbl)
 
@@ -2233,10 +2233,10 @@ class _ProcessingDialog(QDialog):
         self.setStyleSheet(OCEAN_STYLE)
 
         layout = QVBoxLayout(self)
-        layout.setAlignment(QtCompat.AlignCenter)
+        layout.setAlignment(QtCompat.AlignmentFlag.AlignCenter)
 
         self.logo = QLabel()
-        self.logo.setAlignment(QtCompat.AlignCenter)
+        self.logo.setAlignment(QtCompat.AlignmentFlag.AlignCenter)
         pix = QIcon(icon_path).pixmap(QSize(72, 72))
         if not pix.isNull():
             self.logo.setPixmap(pix)
@@ -2250,7 +2250,7 @@ class _ProcessingDialog(QDialog):
         self.lbl = QLabel(
             _t(lang, "Ritaglio in corso…", "Clipping in progress…")
         )
-        self.lbl.setAlignment(QtCompat.AlignCenter)
+        self.lbl.setAlignment(QtCompat.AlignmentFlag.AlignCenter)
         self.lbl.setStyleSheet("color:#f2f5f8;")
         layout.addWidget(self.lbl)
 
@@ -2260,7 +2260,7 @@ class _ProcessingDialog(QDialog):
         layout.addWidget(self.bar)
 
         self.lbl_status = QLabel("")
-        self.lbl_status.setAlignment(QtCompat.AlignCenter)
+        self.lbl_status.setAlignment(QtCompat.AlignmentFlag.AlignCenter)
         self.lbl_status.setStyleSheet("color:#8a97a5; font-size:11px;")
         layout.addWidget(self.lbl_status)
 
@@ -2593,8 +2593,8 @@ class StacBrowserDialog(QDialog):
         for cat in STAC_CATALOGS:
             item = QListWidgetItem()
             item.setText(f"{cat['name']}  —  {cat['description']}")
-            item.setData(QtCompat.UserRole, cat["id"])
-            item.setCheckState(QtCompat.Checked)
+            item.setData(QtCompat.ItemDataRole.UserRole, cat["id"])
+            item.setCheckState(QtCompat.CheckState.Checked)
             self.list_catalogs.addItem(item)
         cat_layout.addWidget(self.list_catalogs)
 
@@ -2789,8 +2789,10 @@ class StacBrowserDialog(QDialog):
         self.scroll_area = QScrollArea()
         self.scroll_area.setWidgetResizable(True)
         self.scroll_area.setHorizontalScrollBarPolicy(
-            QtCompat.ScrollBarAsNeeded)
-        self.scroll_area.setVerticalScrollBarPolicy(QtCompat.ScrollBarAsNeeded)
+            QtCompat.ScrollBarPolicy.ScrollBarAsNeeded)
+        self.scroll_area.setVerticalScrollBarPolicy(
+            QtCompat.ScrollBarPolicy.ScrollBarAsNeeded
+        )
 
         self.scroll_content = QWidget()
         self.scroll_layout = QVBoxLayout(self.scroll_content)
@@ -3289,18 +3291,20 @@ class StacBrowserDialog(QDialog):
 
     def _select_all_catalogs(self):
         for i in range(self.list_catalogs.count()):
-            self.list_catalogs.item(i).setCheckState(QtCompat.Checked)
+            item = self.list_catalogs.item(i)
+            item.setCheckState(QtCompat.CheckState.Checked)
 
     def _deselect_all_catalogs(self):
         for i in range(self.list_catalogs.count()):
-            self.list_catalogs.item(i).setCheckState(QtCompat.Unchecked)
+            item = self.list_catalogs.item(i)
+            item.setCheckState(QtCompat.CheckState.Unchecked)
 
     def _get_selected_catalog_ids(self):
         ids = []
         for i in range(self.list_catalogs.count()):
             item = self.list_catalogs.item(i)
-            if item.checkState() == QtCompat.Checked:
-                ids.append(item.data(QtCompat.UserRole))
+            if item.checkState() == QtCompat.CheckState.Checked:
+                ids.append(item.data(QtCompat.ItemDataRole.UserRole))
         return ids
 
     def _fetch_collections(self):
@@ -3535,8 +3539,12 @@ class StacBrowserDialog(QDialog):
 
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
-        scroll.setHorizontalScrollBarPolicy(QtCompat.ScrollBarAsNeeded)
-        scroll.setVerticalScrollBarPolicy(QtCompat.ScrollBarAlwaysOff)
+        scroll.setHorizontalScrollBarPolicy(
+            QtCompat.ScrollBarPolicy.ScrollBarAsNeeded
+        )
+        scroll.setVerticalScrollBarPolicy(
+            QtCompat.ScrollBarPolicy.ScrollBarAlwaysOff
+        )
         scroll.setMaximumHeight(76)
         scroll.setStyleSheet("QScrollArea { border:none; }")
 
